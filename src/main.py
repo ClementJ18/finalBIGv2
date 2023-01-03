@@ -2,14 +2,15 @@ import io
 import os
 import fnmatch
 import sys
+import threading
 from PyQt6.QtWidgets import (
     QMainWindow, QApplication, QListWidget, QSplitter,
     QHBoxLayout, QWidget, QTabWidget, QPushButton, 
     QVBoxLayout, QComboBox, QMessageBox, QFileDialog, QAbstractItemView,
-    QInputDialog, QCheckBox, QTextEdit, QLabel, QScrollArea
+    QInputDialog, QCheckBox, QTextEdit, QLabel
 )
 from PyQt6.QtGui import (
-    QAction, QKeySequence, QShortcut, QPixmap, QPalette
+    QAction, QKeySequence, QShortcut, QPixmap
 )
 from PyQt6.QtCore import Qt
 
@@ -23,6 +24,7 @@ from PIL.ImageQt import ImageQt
 
 from editor import Editor
 from cah import CustomHero
+import traceback
 
 SEARCH_HISTORY_MAX = 15
 HELP_STRING = """
@@ -232,7 +234,8 @@ class EditorTab(QWidget):
         self.tabs.setTabText(self.tabs.currentIndex(), f"{self.name} *")
 
     def play_audio(self):
-        play(self.song)
+        t = threading.Thread(target=play, args=(self.song,))
+        t.start()
 
 class FileList(QListWidget):
     def __init__(self, parent):
@@ -270,7 +273,7 @@ class FileList(QListWidget):
     def add_file(self, url, blank=False):
         name, ok = QInputDialog.getText(self, "Filename", "Save the file under the following name:", text=url)
         if not ok:
-            return
+            return False
 
         if self.main.archive.file_exists(name):
             ret = QMessageBox.question(
@@ -280,7 +283,7 @@ class FileList(QListWidget):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
             if ret == QMessageBox.StandardButton.No:
-                return
+                return False
             
             self.main.archive.remove_file(name)
 
@@ -292,6 +295,9 @@ class FileList(QListWidget):
                     self.main.archive.add_file(name, f.read())
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
+            return False
+
+        return True
 
     def add_folder(self, url):
         skip_all = False
@@ -301,18 +307,21 @@ class FileList(QListWidget):
                 full_path = os.path.join(root, f)
                 name = name_normalizer(os.path.relpath(full_path, common_dir))
 
-                if not skip_all and self.main.archive.file_exists(name):
-                    ret = QMessageBox.question(
-                        self,
-                        'Overwrite file?', 
-                        "This file already exists, overwrite?", 
-                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.YesToAll
-                    )
-                    if ret == QMessageBox.StandardButton.No:
-                        continue
+                if self.main.archive.file_exists(name):
+                    if not skip_all:
+                        ret = QMessageBox.question(
+                            self,
+                            'Overwrite file?', 
+                            "This file already exists, overwrite?", 
+                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.YesToAll
+                        )
+                        if ret == QMessageBox.StandardButton.No:
+                            continue
 
-                    if ret == QMessageBox.StandardButton.YesToAll:
-                        skip_all = True
+                        if ret == QMessageBox.StandardButton.YesToAll:
+                            skip_all = True
+
+                    self.main.archive.remove_file(name)
 
                 with open(full_path, "rb") as f:
                     self.main.archive.add_file(name, f.read())
@@ -327,8 +336,13 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.base_name = "FinalBIG v2"
 
-        if os.path.exists(sys.argv[1]):
-            self.path = sys.argv[1]
+        try:
+            path_arg = sys.argv[1]
+        except IndexError:
+            path_arg = ""
+
+        if os.path.exists(path_arg):
+            self.path = path_arg
             with open(self.path, "rb") as f:
                 self.archive = Archive(f.read())
             
@@ -480,7 +494,7 @@ class MainWindow(QMainWindow):
         )
 
     def dump_list(self):
-        file = QFileDialog.getSaveFileName(self, "Save dump", os.getcwd())
+        file = QFileDialog.getSaveFileName(self, "Save dump", os.getcwd())[0]
 
         if not file:
             return
@@ -508,9 +522,12 @@ class MainWindow(QMainWindow):
         if not file[0]:
             return
 
-        self.path = file[0]
-        with open(self.path, "rb") as f:
-            self.archive = Archive(f.read())
+        try:
+            self.path = file[0]
+            with open(self.path, "rb") as f:
+                self.archive = Archive(f.read())
+        except Exception as e:
+            QMessageBox.warning(self, "Error", str(e))
 
         self.setWindowTitle(f"{os.path.basename(self.path)} - {self.base_name}")
         self.listwidget.update_list()
@@ -667,4 +684,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
-    sys.exit(app.exec())
+    
+    try:
+        app.exec()
+    except Exception as exception:
+        with open("error.log", "w") as error_file:
+            traceback.print_exc(file=error_file)
