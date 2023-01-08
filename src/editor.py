@@ -9,8 +9,7 @@ KEYWORDS_PATTERN = re.compile(f'^({"|".join(KEYWORDS)})$')
 BEHAVIORS_PATTERN = re.compile(f'^({"|".join(BEHAVIORS)})$')
 
 
-class Commenter():
-
+class Commenter:
     def __init__(self, sci, comment_str):
         self.sci = sci
         self.comment_str = comment_str
@@ -32,10 +31,12 @@ class Commenter():
     def selections(self):
         regions = []
         for i in range(self.sci.SendScintilla(QsciScintilla.SCI_GETSELECTIONS)):
-            regions.append({
-                'begin': self.sci.SendScintilla(QsciScintilla.SCI_GETSELECTIONNSTART, i),
-                'end': self.sci.SendScintilla(QsciScintilla.SCI_GETSELECTIONNEND, i)
-            })
+            regions.append(
+                {
+                    "begin": self.sci.SendScintilla(QsciScintilla.SCI_GETSELECTIONNSTART, i),
+                    "end": self.sci.SendScintilla(QsciScintilla.SCI_GETSELECTIONNEND, i),
+                }
+            )
 
         return regions
 
@@ -44,12 +45,12 @@ class Commenter():
         all_lines = []
         regions = self.selections()
         for r in regions:
-            start_line = self.sci.SendScintilla(QsciScintilla.SCI_LINEFROMPOSITION, r['begin'])
-            end_line = self.sci.SendScintilla(QsciScintilla.SCI_LINEFROMPOSITION, r['end'])
+            start_line = self.sci.SendScintilla(QsciScintilla.SCI_LINEFROMPOSITION, r["begin"])
+            end_line = self.sci.SendScintilla(QsciScintilla.SCI_LINEFROMPOSITION, r["end"])
             for cur_line in range(start_line, end_line + 1):
                 if not cur_line in all_lines:
                     all_lines.append(cur_line)
-            if r['begin'] <= r['end']:
+            if r["begin"] <= r["end"]:
                 self.sel_regions.append(r)
         return all_lines
 
@@ -76,28 +77,29 @@ class Commenter():
             done = False
             for c in range(line_start, line_end - len(self.comment_str) + 1):
                 source_str = self.sci.text(c, c + len(self.comment_str))
-                if(source_str == self.comment_str):
+                if source_str == self.comment_str:
                     self.sci.SendScintilla(QsciScintilla.SCI_DELETERANGE, c, len(self.comment_str))
                     break
         self.sci.endUndoAction()
 
     def restore_selections(self):
-        if(len(self.sel_regions) > 0):
+        if len(self.sel_regions) > 0:
             first = True
             for r in self.sel_regions:
                 if first:
-                    self.sci.SendScintilla(QsciScintilla.SCI_SETSELECTION, r['begin'], r['end'])
+                    self.sci.SendScintilla(QsciScintilla.SCI_SETSELECTION, r["begin"], r["end"])
                     first = False
                 else:
-                    self.sci.SendScintilla(QsciScintilla.SCI_ADDSELECTION, r['begin'], r['end'])
+                    self.sci.SendScintilla(QsciScintilla.SCI_ADDSELECTION, r["begin"], r["end"])
 
     def adjust_selections(self, line, indent):
         for r in self.sel_regions:
-            if self.sci.positionFromLineIndex(line, indent) <= r['begin']:
-                r['begin'] += len(self.comment_str)
-                r['end'] += len(self.comment_str)
-            elif self.sci.positionFromLineIndex(line, indent) < r['end']:
-                r['end'] += len(self.comment_str)
+            if self.sci.positionFromLineIndex(line, indent) <= r["begin"]:
+                r["begin"] += len(self.comment_str)
+                r["end"] += len(self.comment_str)
+            elif self.sci.positionFromLineIndex(line, indent) < r["end"]:
+                r["end"] += len(self.comment_str)
+
 
 class LexerBFME(QsciLexerCustom):
     def __init__(self, parent) -> None:
@@ -105,25 +107,25 @@ class LexerBFME(QsciLexerCustom):
 
         dark_mode = True
         if dark_mode:
-            self.setColor(QColor(232, 232, 232, 1), 0)     # Style 0: light grey
-            self.setColor(QColor(142, 79, 161, 0.8), 1)    # Style 1: purple
-            self.setColor(QColor(222, 133, 222, 0.8), 2)    # Style 2: violet
-            self.setColor(QColor(0, 135, 0, 0.8), 3)       # Style 3: green
-            self.setColor(QColor(185, 40, 76, 0.8), 4)     # Style 4: red
-            self.setColor(QColor(101, 87, 198, 0.8), 5)     # Style 5: Blue
+            self.setColor(QColor(232, 232, 232, 1), 0)  # Style 0: light grey
+            self.setColor(QColor(142, 79, 161, 0.8), 1)  # Style 1: purple
+            self.setColor(QColor(222, 133, 222, 0.8), 2)  # Style 2: violet
+            self.setColor(QColor(0, 135, 0, 0.8), 3)  # Style 3: green
+            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
+            self.setColor(QColor(101, 87, 198, 0.8), 5)  # Style 5: Blue
             self.setColor(QColor(216, 210, 75, 0.8), 6)
             self.setColor(QColor(101, 187, 105, 0.8), 7)
             self.setColor(QColor(101, 176, 187, 0.8), 8)
             self.setColor(QColor(226, 103, 0, 0.8), 9)
 
-            self.parent().setCaretForegroundColor(QColor(255,255,255, 0.3))
+            self.parent().setCaretForegroundColor(QColor(255, 255, 255, 0.3))
         else:
-            self.setColor(QColor(0, 0, 0, 0.8), 0)     # Style 0: black
-            self.setColor(QColor(105, 40, 124, 0.8), 1)   # Style 1: purple
-            self.setColor(QColor(13, 0, 161, 0.8), 2)   # Style 2: blue
-            self.setColor(QColor(59, 125, 61, 1), 3)   # Style 3: green
-            self.setColor(QColor(185, 40, 76, 0.8), 4)     # Style 4: red
-            self.setColor(QColor(50, 34, 166, 0.8), 5)     # Style 5: Blue
+            self.setColor(QColor(255, 255, 255, 0.3), 0)  # Style 0: black
+            self.setColor(QColor(105, 40, 124, 0.8), 1)  # Style 1: purple
+            self.setColor(QColor(13, 0, 161, 0.8), 2)  # Style 2: blue
+            self.setColor(QColor(59, 125, 61, 1), 3)  # Style 3: green
+            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
+            self.setColor(QColor(50, 34, 166, 0.8), 5)  # Style 5: Blue
             self.setColor(QColor(216, 210, 75, 0.8), 6)
             self.setColor(QColor(101, 187, 105, 0.8), 7)
             self.setColor(QColor(101, 176, 187, 0.8), 8)
@@ -133,7 +135,6 @@ class LexerBFME(QsciLexerCustom):
 
         self.first_pass = True
         self.toggled = True
-
 
     def language(self) -> str:
         return "BFMEini"
@@ -154,7 +155,7 @@ class LexerBFME(QsciLexerCustom):
             text = self.parent().text()[start:end]
 
         p = re.compile(r"[*]\/|\/[*]|\s+|\w+|\W")
-        #DO NOT CHANGE ENCODING
+        # DO NOT CHANGE ENCODING
         token_list = [(token, len(bytearray(token, "utf-8"))) for token in p.findall(text)]
 
         editor = self.parent()
@@ -167,7 +168,7 @@ class LexerBFME(QsciLexerCustom):
             if previous_style_nr in [2, 3]:
                 apply_until_linebreak = previous_style_nr
 
-        for i, token in enumerate(token_list): 
+        for i, token in enumerate(token_list):
             if apply_until_linebreak is not None:
                 if "\n" in token[0]:
                     apply_until_linebreak = None
@@ -179,7 +180,7 @@ class LexerBFME(QsciLexerCustom):
                 apply_to_next_token = None
             elif apply_to_string is not None:
                 self.setStyling(token[1], apply_to_string)
-                if token[0] == "\"":
+                if token[0] == '"':
                     apply_to_string = None
             else:
                 if token[0].isdigit() or token[0] in ["%"]:
@@ -194,7 +195,7 @@ class LexerBFME(QsciLexerCustom):
                     self.setStyling(token[1], 4)
                 elif token[0].lower() in SINGLETONS:
                     self.setStyling(token[1], 5)
-                elif token[0].startswith("\""):
+                elif token[0].startswith('"'):
                     self.setStyling(token[1], 6)
                     apply_to_string = 6
                 elif BEHAVIORS_PATTERN.match(token[0]):
@@ -203,6 +204,7 @@ class LexerBFME(QsciLexerCustom):
                     self.setStyling(token[1], 7)
                 else:
                     self.setStyling(token[1], 0)
+
 
 class Editor(QsciScintilla):
     def __init__(self, file_name):
@@ -221,8 +223,7 @@ class Editor(QsciScintilla):
 
         self.SendScintilla(QsciScintilla.SCI_SETMULTIPLESELECTION, True)
         self.SendScintilla(QsciScintilla.SCI_SETMULTIPASTE, 1)
-        self.SendScintilla(
-            QsciScintilla.SCI_SETADDITIONALSELECTIONTYPING, True)
+        self.SendScintilla(QsciScintilla.SCI_SETADDITIONALSELECTIONTYPING, True)
 
         self.file_type = os.path.splitext(file_name)[1]
         self.lexer = None
@@ -248,4 +249,3 @@ class Editor(QsciScintilla):
         else:
             self.lexer.startStyling(0)
             self.lexer.setStyling(len(self.text()), 0)
-        

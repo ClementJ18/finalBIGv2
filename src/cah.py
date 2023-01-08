@@ -1,6 +1,6 @@
 import io
 
-#Credits to withmorten
+# Credits to withmorten
 class CustomHero:
     def __init__(self, b):
         buffer = io.BytesIO(b)
@@ -8,7 +8,7 @@ class CustomHero:
 
         self.alae2str = buffer.read(8).decode("Latin-1")
 
-        buffer.read(1) #blank
+        buffer.read(1)  # blank
 
         self.header1 = int.from_bytes(buffer.read(4), "little")
         self.header2 = int.from_bytes(buffer.read(4), "little")
@@ -17,7 +17,7 @@ class CustomHero:
 
         self.name_size = int.from_bytes(buffer.read(1), "little")
 
-        self.name = buffer.read(self.name_size*2).decode("Latin-1").replace("\x00", "")
+        self.name = buffer.read(self.name_size * 2).decode("Latin-1").replace("\x00", "")
 
         buffer.read(16)
 

@@ -1,38 +1,51 @@
+import fnmatch
 import io
 import os
-import fnmatch
 import sys
 import threading
-from PyQt6.QtWidgets import (
-    QMainWindow, QApplication, QListWidget, QSplitter,
-    QHBoxLayout, QWidget, QTabWidget, QPushButton, 
-    QVBoxLayout, QComboBox, QMessageBox, QFileDialog, QAbstractItemView,
-    QInputDialog, QCheckBox, QTextEdit, QLabel
-)
-from PyQt6.QtGui import (
-    QAction, QKeySequence, QShortcut, QPixmap
-)
-from PyQt6.QtCore import Qt
+import traceback
 
-from pyBIG import Archive
-from pydub import AudioSegment
-from pydub.playback import play
 import audio_metadata
 import tbm_utils
 from PIL import Image
 from PIL.ImageQt import ImageQt
+from pyBIG import Archive
+from pydub import AudioSegment
+from pydub.playback import play
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QListWidget,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSplitter,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
-from editor import Editor
 from cah import CustomHero
-import traceback
+from editor import Editor
 
 SEARCH_HISTORY_MAX = 15
 HELP_STRING = """
 <h2>Shortcuts</h2>
 <ul>
-    <li> <b>Ctrl+S</b> : Save current file </br> </li>
-    <li> <b>Ctrl+;</b> : Comment/Uncomment line/block </br> </li>
-    <li> <b>Return</b> : Search/Find next when done in a search box </br> </li>
+    <li> <b>Ctrl+S</b> : Save current file</li>
+    <li> <b>Ctrl+;</b> : Comment/Uncomment line/block</li>
+    <li> <b>Return</b> : Filter file list when selected </li>
+    <li> <b>Ctrl+Return</b> : Search text when editor selected </li>
+    <li> <b>Ctrl+O</b> : Open new archive </li>
 </ul> 
 """
 
@@ -46,11 +59,23 @@ Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here
 Version: <b>0.1.0</b>
 """
 
+
+def my_excepthook(type, value, tback):
+    with open("error.log", "a+") as f:
+        traceback.print_exc(file=f)
+
+    sys.__excepthook__(type, value, tback)
+
+
+sys.excepthook = my_excepthook
+
+
 def name_normalizer(name):
     return name.replace("/", "\\")
 
+
 class EditorTab(QWidget):
-    def __init__(self, tabs : QTabWidget, archive : Archive, name, text):
+    def __init__(self, tabs: QTabWidget, archive: Archive, name, text):
         super().__init__()
         self.archive = archive
         self.name = name
@@ -78,7 +103,7 @@ class EditorTab(QWidget):
         img_bytes = self.archive.read_file(self.name)
         img = Image.open(io.BytesIO(img_bytes))
         self.image = QPixmap.fromImage(ImageQt(img))
-        
+
         self.label = QLabel(self)
         self.label.setScaledContents(True)
         self.label.setPixmap(self.image)
@@ -95,7 +120,10 @@ class EditorTab(QWidget):
             text = str(e)
 
         try:
-            powers = "\n".join(f"\t- Level {level+1}: {power} (index: {index})" for power, level, index in cah.powers)
+            powers = "\n".join(
+                f"\t- Level {level+1}: {power} (index: {index})"
+                for power, level, index in cah.powers
+            )
             blings = "\n".join(f"\t- {bling}: {index}" for bling, index in cah.blings)
             text = f"""
                Name: {cah.name}
@@ -166,7 +194,7 @@ class EditorTab(QWidget):
         layout.addWidget(self.text)
 
         self.search_parameters = (None, False, False, False)
-        
+
         search_widget = QWidget(self)
         layout.addWidget(search_widget)
         search_layout = QHBoxLayout()
@@ -179,8 +207,8 @@ class EditorTab(QWidget):
 
         self.search = QComboBox(self)
         self.search.setEditable(True)
-        shortcut = QShortcut(QKeySequence(Qt.Key.Key_Return), self.search)
-        shortcut.activated.connect(self.search_file)
+        search_shortcut = QShortcut(QKeySequence("CTRL+Return"), self.search)
+        search_shortcut.activated.connect(self.search_file)
         search_layout.addWidget(self.search, stretch=5)
 
         self.search_button = QPushButton(self)
@@ -208,19 +236,13 @@ class EditorTab(QWidget):
 
         if search_parameters != self.search_parameters:
             self.search_parameters = search_parameters
-            self.text.findFirst(
-                search,
-                regex,
-                case,
-                whole,
-                True
-            )
+            self.text.findFirst(search, regex, case, whole, True)
         else:
             self.text.findNext()
 
         if not any(self.search.itemText(x) == search for x in range(self.search.count())):
             self.search.addItem(search)
-        
+
         if self.search.count() > SEARCH_HISTORY_MAX:
             self.search.removeItem(0)
 
@@ -237,13 +259,14 @@ class EditorTab(QWidget):
         t = threading.Thread(target=play, args=(self.song,))
         t.start()
 
+
 class FileList(QListWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
 
-        self.main : MainWindow = parent
+        self.main: MainWindow = parent
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -266,30 +289,31 @@ class FileList(QListWidget):
                 else:
                     self.add_folder(url.path())
 
-            self.main.archive.repack()
-            self.update_list()    
+            self.update_list()
             event.acceptProposedAction()
 
     def add_file(self, url, blank=False):
-        name, ok = QInputDialog.getText(self, "Filename", "Save the file under the following name:", text=url)
+        name, ok = QInputDialog.getText(
+            self, "Filename", "Save the file under the following name:", text=url
+        )
         if not ok:
             return False
 
         if self.main.archive.file_exists(name):
             ret = QMessageBox.question(
                 self,
-                'Overwrite file?', 
-                "This file already exists, overwrite?", 
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                "Overwrite file?",
+                "This file already exists, overwrite?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if ret == QMessageBox.StandardButton.No:
                 return False
-            
+
             self.main.archive.remove_file(name)
 
         try:
             if blank:
-                self.main.archive.add_file(name, b'')
+                self.main.archive.add_file(name, b"")
             else:
                 with open(url, "rb") as f:
                     self.main.archive.add_file(name, f.read())
@@ -311,9 +335,11 @@ class FileList(QListWidget):
                     if not skip_all:
                         ret = QMessageBox.question(
                             self,
-                            'Overwrite file?', 
-                            "This file already exists, overwrite?", 
-                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.YesToAll
+                            "Overwrite file?",
+                            "This file already exists, overwrite?",
+                            QMessageBox.StandardButton.Yes
+                            | QMessageBox.StandardButton.No
+                            | QMessageBox.StandardButton.YesToAll,
                         )
                         if ret == QMessageBox.StandardButton.No:
                             continue
@@ -328,8 +354,11 @@ class FileList(QListWidget):
 
     def update_list(self):
         self.clear()
-        for index, entry in enumerate(self.main.archive.entries):
+        for index, entry in enumerate(self.main.archive.file_list()):
             self.insertItem(index, entry)
+
+        self.main.filter_list()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -345,7 +374,7 @@ class MainWindow(QMainWindow):
             self.path = path_arg
             with open(self.path, "rb") as f:
                 self.archive = Archive(f.read())
-            
+
             self.setWindowTitle(f"{os.path.basename(self.path)} - {self.base_name}")
         else:
             self.path = None
@@ -353,13 +382,11 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"Untitled Archive - {self.base_name}")
 
         layout = QVBoxLayout()
-        
+
         self.create_menu()
 
         self.listwidget = FileList(self)
         self.listwidget.doubleClicked.connect(self.file_clicked)
-
-        self.listwidget.update_list()
 
         search_widget = QWidget(self)
         search_layout = QHBoxLayout()
@@ -381,7 +408,10 @@ class MainWindow(QMainWindow):
         self.tabs.setElideMode(Qt.TextElideMode.ElideLeft)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
-        self.tabs.setUsesScrollButtons(False)
+        self.tabs.setUsesScrollButtons(True)
+
+        close_shortcut = QShortcut(QKeySequence("CTRL+W"), self)
+        close_shortcut.activated.connect(self.close_tab)
 
         splitter = QSplitter(self)
         splitter.setOrientation(Qt.Orientation.Horizontal)
@@ -395,6 +425,9 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
         self.showMaximized()
+
+        self.listwidget.update_list()
+
 
     def filter_list(self):
         search = self.search.currentText()
@@ -411,7 +444,7 @@ class MainWindow(QMainWindow):
 
         if not any(self.search.itemText(x) == search for x in range(self.search.count())):
             self.search.addItem(search)
-        
+
         if self.search.count() > SEARCH_HISTORY_MAX:
             self.search.removeItem(0)
 
@@ -424,6 +457,8 @@ class MainWindow(QMainWindow):
         new_action.triggered.connect(self.new)
 
         open_action = QAction("Open", self)
+        open_shortcut = QShortcut(QKeySequence("CTRL+O"), self)
+        open_shortcut.activated.connect(self.open)
         file_menu.addAction(open_action)
         open_action.triggered.connect(self.open)
 
@@ -434,7 +469,7 @@ class MainWindow(QMainWindow):
         save_as_action = QAction("Save as...", self)
         file_menu.addAction(save_as_action)
         save_as_action.triggered.connect(self.save_as)
-        
+
         edit_menu = menu.addMenu("&Edit")
 
         new_file_action = QAction("New file", self)
@@ -480,28 +515,19 @@ class MainWindow(QMainWindow):
         help_action.triggered.connect(self.show_help)
 
     def show_help(self):
-        QMessageBox.information(
-            self, 
-            "Help",
-            HELP_STRING
-        )
+        QMessageBox.information(self, "Help", HELP_STRING)
 
     def show_about(self):
-        QMessageBox.information(
-            self, 
-            "About",
-            ABOUT_STRING
-        )
+        QMessageBox.information(self, "About", ABOUT_STRING)
 
     def dump_list(self):
         file = QFileDialog.getSaveFileName(self, "Save dump", os.getcwd())[0]
 
         if not file:
             return
-        
-        self.archive.repack()
+
         with open(file, "w") as f:
-            f.write("\n".join(name for name in self.archive.entries))
+            f.write("\n".join(name for name in self.archive.file_list()))
 
         QMessageBox.information(self, "Dump Generated", "File list dump has been created")
 
@@ -518,7 +544,7 @@ class MainWindow(QMainWindow):
         if not self.close_unsaved():
             return
 
-        file = QFileDialog.getOpenFileName(self, 'Open file', '',"BIG files (*.big)")
+        file = QFileDialog.getOpenFileName(self, "Open file", "", "BIG files (*.big)")
         if not file[0]:
             return
 
@@ -561,8 +587,7 @@ class MainWindow(QMainWindow):
 
         self.listwidget.add_file(file[0])
 
-        self.archive.repack()
-        self.listwidget.update_list()  
+        self.listwidget.update_list()
 
     def add_directory(self):
         path = QFileDialog.getExistingDirectory(self, "Add directory", os.getcwd())
@@ -571,20 +596,18 @@ class MainWindow(QMainWindow):
 
         self.listwidget.add_folder(path[0])
 
-        self.archive.repack()
-        self.listwidget.update_list() 
+        self.listwidget.update_list()
 
     def new_file(self):
         self.listwidget.add_file(None, blank=True)
 
-        self.archive.repack()
         self.listwidget.update_list()
 
     def file_selected(self):
         if self.listwidget.currentItem() is None:
             QMessageBox.warning(self, "No file selected", "You have not selected a file")
             return False
-        
+
         return True
 
     def delete(self):
@@ -595,9 +618,9 @@ class MainWindow(QMainWindow):
         name = item.text()
         ret = QMessageBox.question(
             self,
-            'Delete file?', 
-            f"Are you sure you want to delete {name}?", 
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            "Delete file?",
+            f"Are you sure you want to delete {name}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if ret == QMessageBox.StandardButton.No:
             return
@@ -605,24 +628,27 @@ class MainWindow(QMainWindow):
         self.archive.remove_file(name)
         self.listwidget.update_list()
 
-
     def extract(self):
         if not self.file_selected():
             return
 
         name = self.listwidget.currentItem().text()
         file_name = name.split("\\")[-1]
-        path = QFileDialog.getSaveFileName(self, 'Extract file', os.path.join(os.getcwd(), file_name))
+        path = QFileDialog.getSaveFileName(
+            self, "Extract file", os.path.join(os.getcwd(), file_name)
+        )
         if not path:
             return
 
         with open(path, "wb") as f:
             f.write(self.archive.read_file(name))
 
-        QMessageBox.information(self, "Done", "File has been extracted")        
+        QMessageBox.information(self, "Done", "File has been extracted")
 
     def extract_all(self):
-        path = QFileDialog.getExistingDirectory(self, 'Extract file all files to directory', os.getcwd())
+        path = QFileDialog.getExistingDirectory(
+            self, "Extract file all files to directory", os.getcwd()
+        )
         if not path:
             return
 
@@ -642,15 +668,15 @@ class MainWindow(QMainWindow):
     def add_tab(self, entry):
         text = self.archive.read_file(entry).decode("Latin-1")
         self.tabs.addTab(EditorTab(self.tabs, self.archive, entry, text), entry)
-        self.tabs.setCurrentIndex(self.tabs.count()-1)
+        self.tabs.setCurrentIndex(self.tabs.count() - 1)
 
     def close_tab(self, index):
         if self.tabs.widget(index).changed:
             ret = QMessageBox.question(
                 self,
-                'Close unsaved?', 
-                "There is unsaved work, are you sure you want to close?", 
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                "Close unsaved?",
+                "There is unsaved work, are you sure you want to close?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if ret == QMessageBox.StandardButton.No:
                 return
@@ -663,9 +689,9 @@ class MainWindow(QMainWindow):
         if self.archive.modified_entries or unsaved_tabs:
             ret = QMessageBox.question(
                 self,
-                'Close unsaved?', 
-                "There is unsaved work, are you sure you want to close?", 
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                "Close unsaved?",
+                "There is unsaved work, are you sure you want to close?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             if ret == QMessageBox.StandardButton.No:
                 return False
@@ -678,15 +704,10 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             event.ignore()
-        
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
-    
-    try:
-        app.exec()
-    except Exception as exception:
-        with open("error.log", "w") as error_file:
-            traceback.print_exc(file=error_file)
+    sys.exit(app.exec())
