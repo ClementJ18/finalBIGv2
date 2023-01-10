@@ -3,6 +3,8 @@ import re
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
 from PyQt6.Qsci import QsciScintilla, QsciLexerLua, QsciLexerCustom, QsciLexerXML
 
+import darkdetect
+
 from keywords import KEYWORDS, BEHAVIORS, CODEBLOCKS, SINGLETONS
 
 KEYWORDS_PATTERN = re.compile(f'^({"|".join(KEYWORDS)})$')
@@ -74,7 +76,6 @@ class Commenter:
                 continue
             if line_end - line_start < len(self.comment_str):
                 continue
-            done = False
             for c in range(line_start, line_end - len(self.comment_str) + 1):
                 source_str = self.sci.text(c, c + len(self.comment_str))
                 if source_str == self.comment_str:
@@ -105,8 +106,7 @@ class LexerBFME(QsciLexerCustom):
     def __init__(self, parent) -> None:
         super().__init__(parent)
 
-        dark_mode = True
-        if dark_mode:
+        if darkdetect.isDark():
             self.setColor(QColor(232, 232, 232, 1), 0)  # Style 0: light grey
             self.setColor(QColor(142, 79, 161, 0.8), 1)  # Style 1: purple
             self.setColor(QColor(222, 133, 222, 0.8), 2)  # Style 2: violet
@@ -120,7 +120,7 @@ class LexerBFME(QsciLexerCustom):
 
             self.parent().setCaretForegroundColor(QColor(255, 255, 255, 0.3))
         else:
-            self.setColor(QColor(255, 255, 255, 0.3), 0)  # Style 0: black
+            self.setColor(QColor(0, 0, 0, 0.8), 0)  # Style 0: black
             self.setColor(QColor(105, 40, 124, 0.8), 1)  # Style 1: purple
             self.setColor(QColor(13, 0, 161, 0.8), 2)  # Style 2: blue
             self.setColor(QColor(59, 125, 61, 1), 3)  # Style 3: green
@@ -168,7 +168,7 @@ class LexerBFME(QsciLexerCustom):
             if previous_style_nr in [2, 3]:
                 apply_until_linebreak = previous_style_nr
 
-        for i, token in enumerate(token_list):
+        for token in token_list:
             if apply_until_linebreak is not None:
                 if "\n" in token[0]:
                     apply_until_linebreak = None

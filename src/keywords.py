@@ -3012,7 +3012,6 @@ KEYWORDS = [
     "StartSizeRate",
     "FollowThroughGradient",
     "ArmyHilightedFadeOutTime",
-    "Locomotor",
     "SelfDamageType",
     "MoveUsesStrafeUpdate",
     "RiverModifier",
@@ -3381,4 +3380,5 @@ CODEBLOCKS = [
     "fireweaponnugget",
     "ownershipset",
     "spawnbuildings",
+    "locomotor",
 ]

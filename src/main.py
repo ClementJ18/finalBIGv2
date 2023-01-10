@@ -3,7 +3,7 @@ import io
 import os
 import sys
 import threading
-import traceback
+import logging
 
 import audio_metadata
 import tbm_utils
@@ -13,7 +13,7 @@ from pyBIG import Archive
 from pydub import AudioSegment
 from pydub.playback import play
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QShortcut
+from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QShortcut, QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -46,6 +46,7 @@ HELP_STRING = """
     <li> <b>Return</b> : Filter file list when selected </li>
     <li> <b>Ctrl+Return</b> : Search text when editor selected </li>
     <li> <b>Ctrl+O</b> : Open new archive </li>
+    <li> <b>Ctrl+W</b> : Close currently active tab </li>
 </ul> 
 """
 
@@ -59,15 +60,22 @@ Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here
 Version: <b>0.1.0</b>
 """
 
-
-def my_excepthook(type, value, tback):
-    with open("error.log", "a+") as f:
-        traceback.print_exc(file=f)
-
-    sys.__excepthook__(type, value, tback)
+basedir = os.path.dirname(__file__)
 
 
-sys.excepthook = my_excepthook
+logger = logging.getLogger("FinalBIGv2")
+logger.setLevel(logging.ERROR)
+
+ch_file = logging.FileHandler("error.log", mode="a+", delay=True)
+ch_file.setLevel(logging.ERROR)
+
+logger.addHandler(ch_file)
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+sys.excepthook = handle_exception
 
 
 def name_normalizer(name):
@@ -364,6 +372,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.base_name = "FinalBIG v2"
+        self.setWindowIcon(QIcon(os.path.join(basedir, 'icon.ico')))
 
         try:
             path_arg = sys.argv[1]
@@ -411,7 +420,7 @@ class MainWindow(QMainWindow):
         self.tabs.setUsesScrollButtons(True)
 
         close_shortcut = QShortcut(QKeySequence("CTRL+W"), self)
-        close_shortcut.activated.connect(self.close_tab)
+        close_shortcut.activated.connect(self.close_tab_shortcut)
 
         splitter = QSplitter(self)
         splitter.setOrientation(Qt.Orientation.Horizontal)
@@ -670,6 +679,13 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(EditorTab(self.tabs, self.archive, entry, text), entry)
         self.tabs.setCurrentIndex(self.tabs.count() - 1)
 
+    def close_tab_shortcut(self):
+        index = self.tabs.currentIndex()
+        if index < 0:
+            return
+
+        self.close_tab(index)
+
     def close_tab(self, index):
         if self.tabs.widget(index).changed:
             ret = QMessageBox.question(
@@ -709,5 +725,8 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MainWindow()
+
+    app.setWindowIcon(QIcon(os.path.join(basedir, 'icon.ico')))
+
     w.show()
     sys.exit(app.exec())
