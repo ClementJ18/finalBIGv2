@@ -1,6 +1,6 @@
 audio-metadata==0.11.1
 Pillow==9.4.0
-git+https://github.com/jiaaro/pydub.git@996cec42e9621701edb83354232b2c0ca0121560
+https://github.com/jiaaro/pydub/archive/996cec42e9621701edb83354232b2c0ca0121560.tar.gz
 pyinstaller==5.7.0
 pyinstaller-hooks-contrib==2022.14
 PyQt6==6.4.0
