@@ -8,7 +8,7 @@ a = Analysis(
     ['src/main.py'],
     pathex=[],
     binaries=[],
-    datas=[('./ffmpeg/ffmpeg.exe', '.'), ('icon.ico','.')],
+    datas=[('icon.ico','.')],
     hiddenimports=["PyQt6.sip", "PyQt6.QtPrintSupport"],
     hookspath=[],
     hooksconfig={},
@@ -41,5 +41,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="C:\\Users\\Clement\\Documents\\GitHub\\finalBIGv2\\src\\icon.ico"
+    icon="./src/icon.ico"
 )

@@ -97,7 +97,8 @@ class EditorTab(QWidget):
         elif self.file_type in [".bse", ".map"]:
             self.setLayout(self.generate_unsupported())
         elif self.file_type in [".wav"]:
-            self.setLayout(self.generate_audio_listener())
+            # self.setLayout(self.generate_audio_listener())
+            self.setLayout(self.generate_unsupported())
         elif self.file_type in [".cah"]:
             self.setLayout(self.generate_cah_viewer())
         elif self.file_type in [".tga", ".dds"]:
@@ -645,7 +646,7 @@ class MainWindow(QMainWindow):
         file_name = name.split("\\")[-1]
         path = QFileDialog.getSaveFileName(
             self, "Extract file", os.path.join(os.getcwd(), file_name)
-        )
+        )[0]
         if not path:
             return
 
@@ -657,7 +658,7 @@ class MainWindow(QMainWindow):
     def extract_all(self):
         path = QFileDialog.getExistingDirectory(
             self, "Extract file all files to directory", os.getcwd()
-        )
+        )[0]
         if not path:
             return
 
