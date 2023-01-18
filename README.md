@@ -18,4 +18,9 @@ At this very early stage I am mostly looking for feedback so if you have any tho
 ![Demo of the GUI](demo.png)
 
 ## How to download
-A new build is compiled directly from the source everytime a commit is pushed to the repository, you can download it from the [build](https://github.com/ClementJ18/finalBIGv2/actions/workflows/main.yml) menu. 
+A new build is compiled directly from the source everytime a commit is pushed to the repository, you can download it from the [build menu](https://github.com/ClementJ18/finalBIGv2/actions/workflows/main.yml?query=branch%3Amain).
+
+## Current Limitations
+- Syntax Highlighting gets kinda weird with non-ASCII characters, you can reset it by turning it off and on
+- Audio files are currently not supported until I find a way to bundle ffmpeg
+- Auto-compile for Linux does not work
