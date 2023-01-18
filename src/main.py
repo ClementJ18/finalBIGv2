@@ -38,6 +38,8 @@ from PyQt6.QtWidgets import (
 from cah import CustomHero
 from editor import Editor
 
+__version__ = "0.1.1"
+
 SEARCH_HISTORY_MAX = 15
 HELP_STRING = """
 <h2>Shortcuts</h2>
@@ -60,14 +62,15 @@ Quick rundown
 </ul>
 """
 
-ABOUT_STRING = """
+ABOUT_STRING = f"""
 <h2>About</h2>
 <b>FinalBIGv2</b> was made by officialNecro because he was getting very annoyed at
 FinalBIG crashing all the time. <br/>
 
-Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>. Suggestions and bug reports should also go there. <br/><br/>
+Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>. 
+Suggestions and bug reports should also go there. <br/><br/>
 
-Version: <b>0.1.0</b>
+Version: <b>{__version__}</b>
 """
 
 basedir = os.path.dirname(__file__)

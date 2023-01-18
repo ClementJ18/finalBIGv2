@@ -11,7 +11,6 @@ a = Analysis(
     datas=[('./src/icon.ico','.')],
     hiddenimports=["PyQt6.sip", "PyQt6.QtPrintSupport"],
     hookspath=[],
-    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
