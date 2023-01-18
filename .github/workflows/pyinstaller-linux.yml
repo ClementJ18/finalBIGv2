@@ -1,4 +1,4 @@
-name: Package pckg with PyInstaller - Linux
+name: Package exe with PyInstaller - Linux
 
 on:
   push:
@@ -15,11 +15,11 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Package Application
-      uses: JackMcKew/pyinstaller-action-linux@main
+      uses: JackMcKew/pyinstaller-action-linux@0.1.4
       with:
         path: .
 
     - uses: actions/upload-artifact@v3
       with:
         name: FinalBIGv2-Linux
-        path: dist/
+        path: dist/linux/
