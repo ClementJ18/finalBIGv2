@@ -1,0 +1,36 @@
+name: Package exe with PyInstaller
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # build_linux:
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: PyInstaller Linux
+  #     uses: JackMcKew/pyinstaller-action-linux@0.1.4
+  #     with:
+  #       path: .
+  #   - name: Make file executable
+  #     run: sudo chmod +x dist/linux/FinalBIGv2
+  #   - uses: actions/upload-artifact@v3
+  #     with:
+  #       name: FinalBIGv2 - Linux
+  #       path: dist/linux/
+        
+  build_windows:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: PyInstaller Windows
+      uses: JackMcKew/pyinstaller-action-windows@v0.1.2
+      with:
+        path: .
+    - uses: actions/upload-artifact@v3
+      with:
+        name: FinalBIGv2 - Windows
+        path: dist/
