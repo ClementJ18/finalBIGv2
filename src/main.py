@@ -239,6 +239,12 @@ class EditorTab(QWidget):
         search_layout.addWidget(highlighting)
         highlighting.stateChanged.connect(self.text.toggle_highlighting)
 
+        if self.file_type in [".inc", ".ini"]:
+            dark_mode = QCheckBox("Dark Mode")
+            dark_mode.setChecked(self.text.lexer.dark_mode)
+            search_layout.addWidget(dark_mode)
+            dark_mode.stateChanged.connect(self.text.toggle_dark_mode)
+
         self.search = QComboBox(self)
         self.search.setEditable(True)
         search_layout.addWidget(self.search, stretch=5)
@@ -371,7 +377,6 @@ class FileList(QListWidget):
         return self._add_file(url, name, blank)
 
     def add_folder(self, url):
-        skip_all = False
         common_dir = os.path.dirname(url)
         for root, _, files in os.walk(url):
             for f in files:
@@ -532,6 +537,10 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(extract_all_action)
         extract_all_action.triggered.connect(self.extract_all)
 
+        extract_filtered_action = QAction("Extract Filtered", self)
+        edit_menu.addAction(extract_filtered_action)
+        extract_filtered_action.triggered.connect(self.extract_filtered)
+
         tools_menu = menu.addMenu("&Tools")
 
         dump_list_action = QAction("Dump File List", self)
@@ -563,7 +572,7 @@ class MainWindow(QMainWindow):
 
     def _save(self, path):
         if path is None:
-            path = QFileDialog.getSaveFileName(self, "Save archive", os.getcwd())[0]
+            path = QFileDialog.getSaveFileName(self, "Save archive")[0]
 
         if not path:
             return
@@ -606,7 +615,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "About", ABOUT_STRING)
 
     def dump_list(self):
-        file = QFileDialog.getSaveFileName(self, "Save dump", os.getcwd())[0]
+        file = QFileDialog.getSaveFileName(self, "Save dump")[0]
         if not file:
             return
 
@@ -652,7 +661,7 @@ class MainWindow(QMainWindow):
         self.tabs.widget(index).search_file()
 
     def add_file(self):
-        file = QFileDialog.getOpenFileName(self, "Add file", os.getcwd())[0]
+        file = QFileDialog.getOpenFileName(self, "Add file"[0])
         if not file:
             return
 
@@ -660,7 +669,7 @@ class MainWindow(QMainWindow):
         self.listwidget.update_list()
 
     def add_directory(self):
-        path = QFileDialog.getExistingDirectory(self, "Add directory", os.getcwd())[0]
+        path = QFileDialog.getExistingDirectory(self, "Add directory")
         if not path:
             return
 
@@ -715,7 +724,7 @@ class MainWindow(QMainWindow):
         name = self.listwidget.currentItem().text()
         file_name = name.split("\\")[-1]
         path = QFileDialog.getSaveFileName(
-            self, "Extract file", os.path.join(os.getcwd(), file_name)
+            self, "Extract file", file_name
         )[0]
         if not path:
             return
@@ -727,13 +736,25 @@ class MainWindow(QMainWindow):
 
     def extract_all(self):
         path = QFileDialog.getExistingDirectory(
-            self, "Extract file all files to directory", os.getcwd()
-        )[0]
+            self, "Extract all files to directory"
+        )
         if not path:
             return
 
         self.archive.extract(path)
         QMessageBox.information(self, "Done", "All files have been extracted")
+
+    def extract_filtered(self):
+        path = QFileDialog.getExistingDirectory(
+            self, "Extract filtered files to directory"
+        )
+        if not path:
+            return
+
+        files = [self.listwidget.item(x).text() for x in range(self.listwidget.count()) if not self.listwidget.item(x).isHidden()]
+
+        self.archive.extract(path, files=files)
+        QMessageBox.information(self, "Done", "Filtered files have been extracted")
 
     def file_clicked(self, qmodelindex):
         name = self.listwidget.currentItem().text()

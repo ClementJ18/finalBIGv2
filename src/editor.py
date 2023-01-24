@@ -105,8 +105,13 @@ class Commenter:
 class LexerBFME(QsciLexerCustom):
     def __init__(self, parent) -> None:
         super().__init__(parent)
+        self.dark_mode = darkdetect.isDark()
+        self.first_pass = True
+        self.toggled = True
+        self.update_colors()
 
-        if darkdetect.isDark():
+    def update_colors(self):
+        if self.dark_mode:
             self.setColor(QColor(232, 232, 232, 1), 0)  # Style 0: light grey
             self.setColor(QColor(142, 79, 161, 0.8), 1)  # Style 1: purple
             self.setColor(QColor(222, 133, 222, 0.8), 2)  # Style 2: violet
@@ -132,9 +137,6 @@ class LexerBFME(QsciLexerCustom):
             self.setColor(QColor(226, 103, 0, 0.8), 9)
 
             self.parent().setCaretForegroundColor(QColor(0, 0, 0, 0.8))
-
-        self.first_pass = True
-        self.toggled = True
 
     def language(self) -> str:
         return "BFMEini"
@@ -249,3 +251,11 @@ class Editor(QsciScintilla):
         else:
             self.lexer.startStyling(0)
             self.lexer.setStyling(len(self.text()), 0)
+
+    def toggle_dark_mode(self, state):
+        if self.lexer is None:
+            return
+
+        self.lexer.dark_mode = state
+        self.lexer.update_colors()
+        self.toggle_highlighting(self.lexer.toggled)
