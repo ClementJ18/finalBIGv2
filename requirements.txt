@@ -10,5 +10,5 @@ PyQt6-sip==13.4.0
 qt6-applications==6.1.0.2.2
 qt6-tools==6.1.0.1.2
 tbm-utils==2.6.0
-pyBIG==0.1.4
+pyBIG==0.1.5
 darkdetect==0.8.0
