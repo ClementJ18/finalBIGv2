@@ -38,7 +38,7 @@ from PyQt6.QtWidgets import (
 from cah import CustomHero
 from editor import Editor
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 SEARCH_HISTORY_MAX = 15
 HELP_STRING = """
