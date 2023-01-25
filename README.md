@@ -20,6 +20,8 @@ At this very early stage I am mostly looking for feedback so if you have any tho
 ## How to download
 A new build is compiled directly from the source everytime a commit is pushed to the repository, you can download it from the [build menu](https://github.com/ClementJ18/finalBIGv2/actions/workflows/main.yml?query=branch%3Amain).
 
+There is also a public download that's semi-regularly updated in case you don't have a GitHub account: https://www.moddb.com/downloads/finalbigv2
+
 ## Current Limitations
 - Syntax Highlighting gets kinda weird with non-ASCII characters, you can reset it by turning it off and on
 - Audio files are currently not supported until I find a way to bundle ffmpeg
