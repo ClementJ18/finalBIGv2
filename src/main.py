@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
 
         self.listwidget = FileList(self)
-        self.listwidget.clicked.connect(self.file_single_clicked)
+        self.listwidget.itemSelectionChanged.connect(self.file_single_clicked)
         self.listwidget.doubleClicked.connect(self.file_double_clicked)
 
         search_widget = QWidget(self)
@@ -528,7 +528,7 @@ class MainWindow(QMainWindow):
             if self.tabs.tabText(0) == preview_name(name):
                 self.tabs.removeTab(0)
 
-    def file_single_clicked(self, _):
+    def file_single_clicked(self):
         name = self.listwidget.currentItem().text()
         for x in range(self.tabs.count()):
             if self.tabs.tabText(x) == name:
