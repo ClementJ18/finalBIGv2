@@ -1,77 +1,32 @@
-import enum
 import fnmatch
-import io
 import os
 import sys
-import threading
 import logging
 
-import audio_metadata
-import tbm_utils
-from PIL import Image
-from PIL.ImageQt import ImageQt
 from pyBIG import Archive
-from pydub import AudioSegment
-from pydub.playback import play
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence, QPixmap, QShortcut, QIcon
+from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QIcon
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QCheckBox,
     QComboBox,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
-    QLabel,
     QListWidget,
     QMainWindow,
     QMessageBox,
     QPushButton,
     QSplitter,
     QTabWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
+from tabs import get_tab_from_file_type
 
-from cah import CustomHero
-from editor import Editor
+from utils import ABOUT_STRING, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name
 
-__version__ = "0.1.2"
-
-SEARCH_HISTORY_MAX = 15
-HELP_STRING = """
-<h2>Shortcuts</h2>
-<ul>
-    {shortcuts}
-</ul> 
-
-<h2> File Search </h2>
-File search is based on Unix filename pattern. This means that something like 
-"sauron.ini" will look for a file called exactly "sauron.ini". If you're looking for
-something like "data/ini/objects/sauron.ini" make sure you add a * to match everything
-before. Like "*/sauron.ini".<br/>
-<br/>
-Quick rundown
-<ul>
-<li><b> * </b> - matches everything </li>
-<li><b> ? </b> - matches any single character </li>
-<li><b> [seq] </b> - matches any character in seq </li>
-<li><b> [!seq] </b> - matches any character not in seq </li>
-</ul>
-"""
-
-ABOUT_STRING = f"""
-<h2>About</h2>
-<b>FinalBIGv2</b> was made by officialNecro because he was getting very annoyed at
-FinalBIG crashing all the time. <br/>
-
-Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>. 
-Suggestions and bug reports should also go there. <br/><br/>
-
-Version: <b>{__version__}</b>
-"""
+__version__ = "0.1.6"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
@@ -89,225 +44,6 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 
 sys.excepthook = handle_exception
-
-
-def name_normalizer(name):
-    return name.replace("/", "\\")
-
-
-class TabType(enum.Enum):
-    TEXT = enum.auto()
-    MAP = enum.auto()
-    AUDIO = enum.auto()
-    CAH = enum.auto()
-    IMAGE = enum.auto()
-    NONE = enum.auto()
-
-
-class EditorTab(QWidget):
-    def __init__(self, tabs: QTabWidget, archive: Archive, name, text):
-        super().__init__()
-        self.archive = archive
-        self.name = name
-        self.tabs = tabs
-        self.changed = False
-        self.scale = 1
-        self.type = TabType.NONE
-
-        self.file_type = os.path.splitext(name)[1]
-        if self.file_type in [".lua", ".inc", ".ini", ".str", ".xml"]:
-            self.setLayout(self.generate_text_editor(text))
-            self.type = TabType.TEXT
-        elif self.file_type in [".bse", ".map"]:
-            self.setLayout(self.generate_unsupported())
-            self.type = TabType.MAP
-        elif self.file_type in [".wav"]:
-            # self.setLayout(self.generate_audio_listener())
-            self.setLayout(self.generate_unsupported())
-            self.type = TabType.AUDIO
-        elif self.file_type in [".cah"]:
-            self.setLayout(self.generate_cah_viewer())
-            self.type = TabType.CAH
-        elif self.file_type in [".tga", ".dds"]:
-            self.type = TabType.IMAGE
-            self.setLayout(self.generate_image_viewer())
-        else:
-            self.setLayout(self.generate_unsupported())
-
-    def generate_image_viewer(self):
-        layout = QVBoxLayout()
-
-        img_bytes = self.archive.read_file(self.name)
-        img = Image.open(io.BytesIO(img_bytes))
-        self.image = QPixmap.fromImage(ImageQt(img))
-
-        self.label = QLabel(self)
-        self.label.setScaledContents(True)
-        self.label.setPixmap(self.image)
-        layout.addWidget(self.label)
-
-        return layout
-
-    def generate_cah_viewer(self):
-        layout = QHBoxLayout()
-
-        try:
-            cah = CustomHero(self.archive.read_file(self.name))
-        except Exception as e:
-            text = str(e)
-
-        try:
-            powers = "\n".join(
-                f"\t- Level {level+1}: {power} (index: {index})"
-                for power, level, index in cah.powers
-            )
-            blings = "\n".join(f"\t- {bling}: {index}" for bling, index in cah.blings)
-            text = f"""
-               Name: {cah.name}
-               Colors: {cah.color1}, {cah.color2}, {cah.color3}
-
-               Power: \n{powers}\n
-               Blings: \n{blings}\n
-            """
-        except Exception as e:
-            text = str(e)
-
-        data = QTextEdit(self)
-        data.setReadOnly(True)
-        data.setText(text)
-
-        layout.addWidget(data)
-
-        return layout
-
-    def generate_unsupported(self):
-        layout = QHBoxLayout()
-
-        data = QTextEdit(self)
-        data.setReadOnly(True)
-        data.setText(f"{self.file_type} is not currently supported")
-
-        layout.addWidget(data)
-
-        return layout
-
-    def generate_audio_listener(self):
-        layout = QVBoxLayout()
-
-        data = self.archive.read_file(self.name)
-        self.song = AudioSegment.from_file(io.BytesIO(data), format=self.file_type[1:])
-
-        play_button = QPushButton(self)
-        play_button.setText("Play")
-        play_button.clicked.connect(self.play_audio)
-        layout.addWidget(play_button)
-
-        metadata = audio_metadata.loads(data)
-
-        data = QTextEdit(self)
-        data.setReadOnly(True)
-        data.setText(
-            f"""
-            File: {self.name}
-            Size: {tbm_utils.humanize_filesize(metadata.filesize)}
-            Duration: {tbm_utils.humanize_duration(metadata.streaminfo.duration)}
-            """
-        )
-
-        layout.addWidget(data)
-
-        return layout
-
-    def generate_text_editor(self, text):
-        layout = QVBoxLayout()
-        self.text = Editor(self.name)
-
-        self.text.setText(text)
-        self.text.textChanged.connect(self.text_changed)
-
-        layout.addWidget(self.text)
-
-        self.search_parameters = (None, False, False, False)
-
-        search_widget = QWidget(self)
-        layout.addWidget(search_widget)
-        search_layout = QHBoxLayout()
-        search_widget.setLayout(search_layout)
-
-        highlighting = QCheckBox("Highlighting")
-        highlighting.setChecked(True)
-        search_layout.addWidget(highlighting)
-        highlighting.stateChanged.connect(self.text.toggle_highlighting)
-
-        if self.file_type in [".inc", ".ini"]:
-            dark_mode = QCheckBox("Dark Mode")
-            dark_mode.setChecked(self.text.lexer.dark_mode)
-            search_layout.addWidget(dark_mode)
-            dark_mode.stateChanged.connect(self.text.toggle_dark_mode)
-
-        self.search = QComboBox(self)
-        self.search.setEditable(True)
-        search_layout.addWidget(self.search, stretch=5)
-
-        self.search_button = QPushButton(self)
-        self.search_button.setText("Search current file")
-        self.search_button.clicked.connect(self.search_file)
-        search_layout.addWidget(self.search_button)
-
-        self.regex_box = QCheckBox("Regex")
-        search_layout.addWidget(self.regex_box)
-
-        self.case_box = QCheckBox("Case sensitive")
-        search_layout.addWidget(self.case_box)
-
-        self.whole_box = QCheckBox("Whole Word")
-        search_layout.addWidget(self.whole_box)
-
-        return layout
-
-    def search_file(self):
-        if not self.type is TabType.TEXT:
-            return
-
-        search = self.search.currentText()
-        regex = self.regex_box.isChecked()
-        case = self.case_box.isChecked()
-        whole = self.whole_box.isChecked()
-        search_parameters = (search, regex, case, whole)
-
-        if search_parameters != self.search_parameters:
-            self.search_parameters = search_parameters
-            self.text.findFirst(search, regex, case, whole, True)
-        else:
-            self.text.findNext()
-
-        if not any(self.search.itemText(x) == search for x in range(self.search.count())):
-            self.search.addItem(search)
-
-        if self.search.count() > SEARCH_HISTORY_MAX:
-            self.search.removeItem(0)
-
-    def save_text(self):
-        if not self.type is TabType.TEXT:
-            return
-
-        self.archive.edit_file(self.name, self.text.text().encode("Latin-1"))
-        self.changed = False
-        self.tabs.setTabText(self.tabs.currentIndex(), self.name)
-
-    def text_changed(self):
-        if not self.type is TabType.TEXT:
-            return
-
-        self.changed = True
-        self.tabs.setTabText(self.tabs.currentIndex(), f"{self.name} *")
-
-    def play_audio(self):
-        if not self.type is TabType.AUDIO:
-            return
-
-        t = threading.Thread(target=play, args=(self.song,))
-        t.start()
 
 
 class FileList(QListWidget):
@@ -342,16 +78,19 @@ class FileList(QListWidget):
             self.update_list()
             event.acceptProposedAction()
 
-    def _add_file(self, url, name, blank=False):
+    def _add_file(self, url, name, blank=False, skip_all=False):
+        ret = None
         if self.main.archive.file_exists(name):
-            ret = QMessageBox.question(
-                self,
-                "Overwrite file?",
-                "This file already exists, overwrite?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            )
-            if ret == QMessageBox.StandardButton.No:
-                return False
+            if not skip_all:
+                ret = QMessageBox.question(
+                    self,
+                    "Overwrite file?",
+                    f"{name} already exists, overwrite?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.YesToAll,
+                    QMessageBox.StandardButton.No,
+                )
+                if ret == QMessageBox.StandardButton.No:
+                    return ret
 
             self.main.archive.remove_file(name)
 
@@ -363,9 +102,9 @@ class FileList(QListWidget):
                     self.main.archive.add_file(name, f.read())
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
-            return False
+            return ret
 
-        return True
+        return ret
 
     def add_file(self, url, blank=False):
         name, ok = QInputDialog.getText(
@@ -374,15 +113,19 @@ class FileList(QListWidget):
         if not ok:
             return False
 
-        return self._add_file(url, name, blank)
+        self._add_file(url, name, blank)
 
     def add_folder(self, url):
+        skip_all = False
         common_dir = os.path.dirname(url)
         for root, _, files in os.walk(url):
             for f in files:
                 full_path = os.path.join(root, f)
-                name = name_normalizer(os.path.relpath(full_path, common_dir))
-                self._add_file(full_path, name, False)
+                name = normalize_name(os.path.relpath(full_path, common_dir))
+                ret = self._add_file(full_path, name, blank=False, skip_all=skip_all)
+
+                if ret == QMessageBox.StandardButton.YesToAll:
+                    skip_all = True
 
     def update_list(self):
         self.clear()
@@ -401,7 +144,8 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
 
         self.listwidget = FileList(self)
-        self.listwidget.doubleClicked.connect(self.file_clicked)
+        self.listwidget.clicked.connect(self.file_single_clicked)
+        self.listwidget.doubleClicked.connect(self.file_double_clicked)
 
         search_widget = QWidget(self)
         search_layout = QHBoxLayout()
@@ -451,6 +195,14 @@ class MainWindow(QMainWindow):
 
     def create_shortcuts(self):
         self.shorcuts = [
+            (
+                "Click on file",
+                "Preview file"
+            ),
+            (
+                "Double-click on file",
+                "Edit file"
+            ),
             (
                 QShortcut(QKeySequence("CTRL+N",),self,self.new,),
                 "Create a new archive",
@@ -533,17 +285,17 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(extract_action)
         extract_action.triggered.connect(self.extract)
 
-        extract_all_action = QAction("Extract All", self)
+        extract_all_action = QAction("Extract all", self)
         edit_menu.addAction(extract_all_action)
         extract_all_action.triggered.connect(self.extract_all)
 
-        extract_filtered_action = QAction("Extract Filtered", self)
+        extract_filtered_action = QAction("Extract filtered", self)
         edit_menu.addAction(extract_filtered_action)
         extract_filtered_action.triggered.connect(self.extract_filtered)
 
         tools_menu = menu.addMenu("&Tools")
 
-        dump_list_action = QAction("Dump File List", self)
+        dump_list_action = QAction("Dump file list", self)
         tools_menu.addAction(dump_list_action)
         dump_list_action.triggered.connect(self.dump_list)
 
@@ -557,7 +309,7 @@ class MainWindow(QMainWindow):
         option_menu.addAction(help_action)
         help_action.triggered.connect(self.show_help)
 
-    def file_selected(self):
+    def is_file_selected(self):
         if self.listwidget.currentItem() is None:
             QMessageBox.warning(self, "No file selected", "You have not selected a file")
             return False
@@ -578,8 +330,8 @@ class MainWindow(QMainWindow):
             return
 
         for index in range(self.tabs.count()):
-            if "*" in self.tabs.tabText(index):
-                self.tabs.widget(index).save_text()
+            if is_unsaved(self.tabs.tabText(index)):
+                self.tabs.widget(index).save()
 
         self.archive.save(path)
         QMessageBox.information(self, "Done", "Archive has been saved")
@@ -612,7 +364,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Help", string)
 
     def show_about(self):
-        QMessageBox.information(self, "About", ABOUT_STRING)
+        QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))
 
     def dump_list(self):
         file = QFileDialog.getSaveFileName(self, "Save dump")[0]
@@ -651,17 +403,19 @@ class MainWindow(QMainWindow):
         if index < 0:
             return
 
-        self.tabs.widget(index).save_text()
+        self.tabs.widget(index).save()
 
     def search_file(self):
         index = self.tabs.currentIndex()
         if index < 0:
             return
 
-        self.tabs.widget(index).search_file()
+        widget = self.tabs.widget(index)
+        if hasattr(widget, "search_file"):
+            widget.search_file()
 
     def add_file(self):
-        file = QFileDialog.getOpenFileName(self, "Add file"[0])
+        file = QFileDialog.getOpenFileName(self, "Add file")[0]
         if not file:
             return
 
@@ -700,7 +454,7 @@ class MainWindow(QMainWindow):
             self.search.removeItem(0)
 
     def delete(self):
-        if not self.file_selected():
+        if not self.is_file_selected():
             return
 
         item = self.listwidget.currentItem()
@@ -710,6 +464,7 @@ class MainWindow(QMainWindow):
             "Delete file?",
             f"Are you sure you want to delete {name}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
         )
         if ret == QMessageBox.StandardButton.No:
             return
@@ -718,7 +473,7 @@ class MainWindow(QMainWindow):
         self.listwidget.update_list()
 
     def extract(self):
-        if not self.file_selected():
+        if not self.is_file_selected():
             return
 
         name = self.listwidget.currentItem().text()
@@ -756,7 +511,7 @@ class MainWindow(QMainWindow):
         self.archive.extract(path, files=files)
         QMessageBox.information(self, "Done", "Filtered files have been extracted")
 
-    def file_clicked(self, qmodelindex):
+    def file_double_clicked(self, _):
         name = self.listwidget.currentItem().text()
 
         for x in range(self.tabs.count()):
@@ -764,12 +519,35 @@ class MainWindow(QMainWindow):
                 self.tabs.setCurrentIndex(x)
                 break
         else:
-            self.add_tab(name)
+            tab = get_tab_from_file_type(name)(self.tabs, self.archive, name)
+            tab.generate_layout()
 
-    def add_tab(self, entry):
-        text = self.archive.read_file(entry).decode("Latin-1")
-        self.tabs.addTab(EditorTab(self.tabs, self.archive, entry, text), entry)
-        self.tabs.setCurrentIndex(self.tabs.count() - 1)
+            self.tabs.addTab(tab, name)
+            self.tabs.setCurrentIndex(self.tabs.count() - 1)
+
+            if self.tabs.tabText(0) == preview_name(name):
+                self.tabs.removeTab(0)
+
+    def file_single_clicked(self, _):
+        name = self.listwidget.currentItem().text()
+        for x in range(self.tabs.count()):
+            if self.tabs.tabText(x) == name:
+                self.tabs.setCurrentIndex(x)
+                break
+        else:
+            tab = get_tab_from_file_type(name)(self.tabs, self.archive, name)
+            tab.generate_preview()
+
+            if self.tabs.currentIndex() < 0:
+                self.tabs.addTab(tab, preview_name(name))
+                return
+
+            if is_preview(self.tabs.tabText(0)):
+                self.tabs.removeTab(0)
+
+            self.tabs.insertTab(0, tab, preview_name(name))
+            self.tabs.setCurrentIndex(0)
+        
 
     def close_tab_shortcut(self):
         index = self.tabs.currentIndex()
@@ -779,12 +557,13 @@ class MainWindow(QMainWindow):
         self.close_tab(index)
 
     def close_tab(self, index):
-        if self.tabs.widget(index).changed:
+        if is_unsaved(self.tabs.tabText(index)):
             ret = QMessageBox.question(
                 self,
                 "Close unsaved?",
                 "There is unsaved work, are you sure you want to close?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
             )
             if ret == QMessageBox.StandardButton.No:
                 return
@@ -793,13 +572,14 @@ class MainWindow(QMainWindow):
         self.tabs.removeTab(index)
 
     def close_unsaved(self):
-        unsaved_tabs = any("*" in self.tabs.tabText(i) for i in range(self.tabs.count()))
+        unsaved_tabs = any(is_unsaved(self.tabs.tabText(i)) for i in range(self.tabs.count()))
         if self.archive.modified_entries or unsaved_tabs:
             ret = QMessageBox.question(
                 self,
                 "Close unsaved?",
                 "There is unsaved work, are you sure you want to close?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
             )
             if ret == QMessageBox.StandardButton.No:
                 return False

@@ -11,6 +11,8 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Filtering by filename
 * Text search in file (including with Regex)
 * Ability to create new files directly in the archive
+* Adapts to dark mode
+* Linux support
 * And many more in the future!
 
 At this very early stage I am mostly looking for feedback so if you have any thoughts feel free to open a ticket or find me on discord @Necro#6714. I can usually be found on quite a few BFME/SAGE servers.
