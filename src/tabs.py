@@ -1,7 +1,9 @@
 import io
 import os
+import tempfile
 import threading
 import traceback
+import webbrowser
 
 import audio_metadata
 import tbm_utils
@@ -22,6 +24,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 from cah import CustomHero
 from editor import Editor
@@ -72,12 +76,12 @@ class TextTab(GenericTab):
         search_layout = QHBoxLayout()
         search_widget.setLayout(search_layout)
 
-        highlighting = QCheckBox("Highlighting")
-        highlighting.setChecked(True)
-        search_layout.addWidget(highlighting)
-        highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
-
         if self.file_type in [".inc", ".ini"]:
+            highlighting = QCheckBox("Highlighting")
+            highlighting.setChecked(True)
+            search_layout.addWidget(highlighting)
+            highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
+
             dark_mode = QCheckBox("Dark Mode")
             dark_mode.setChecked(self.text_widget.lexer.dark_mode)
             search_layout.addWidget(dark_mode)
@@ -212,9 +216,81 @@ class SoundTab(GenericTab):
         t = threading.Thread(target=play, args=(self.song,))
         t.start()
 
+class SaveEventHandler(FileSystemEventHandler):
+    def __init__(self, tab, name, tmp_name):
+        super().__init__()
+
+        self.tab = tab
+        self.file_name = name
+        self.tmp_name = tmp_name
+
+    def on_modified(self, event):
+        if event.src_path == self.tmp_name:
+            self.tab.save()
+
+    def on_closed(self, event):
+        print("CLOSED")
+        print(event)
+        if event.src_path == self.tmp_name:
+            self.tab.delete()
+    
+
+class MapTab(GenericTab):
+    def __init__(self, tabs: QTabWidget, archive: Archive, name):
+        super().__init__(tabs, archive, name)
+
+        self.observer = None
+        self.tmp = None
+
+    def generate_layout(self, preview=False):
+        layout = QHBoxLayout()
+
+        data = QTextEdit(self)
+        data.setReadOnly(True)
+        data.setText(f"Preview mode for {self.file_type} not supported, double click to edit.\n\n This will use the worldbuilder from your current game installation.")
+
+        layout.addWidget(data)
+
+        self.setLayout(layout)
+
+        if preview:
+            return
+
+        self.tmp = tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=self.file_type)
+        self.tmp.write(self.data)
+        self.tmp.close()
+
+        webbrowser.open(self.tmp.name)
+
+        self.observer = Observer()
+        self.observer.schedule(SaveEventHandler(self, self.name, self.tmp.name), os.path.dirname(self.tmp.name))
+
+        self.observer.start()
+
+    def save(self):
+        with open(self.tmp.name, "rb") as f:
+            data = f.read()
+            self.archive.edit_file(self.name, data)
+            self.data = data
+
+    def delete(self):
+        index = self.tabs.indexOf(self)
+        self.tabs.remove_tab(index)
+
+    def deleteLater(self) -> None:
+        if self.observer is not None:
+            self.observer.stop()
+            os.remove(self.tmp.name)
+
+        return super().deleteLater()
+
+    def generate_preview(self):
+        self.generate_layout(preview=True)
+        
+
 TAB_TYPES = {
     (".lua", ".inc", ".ini", ".str", ".xml"): TextTab,
-    (".bse", ".map"): GenericTab,
+    (".bse", ".map"): MapTab,
     (".wav",): SoundTab,
     (".cah",): CustomHeroTab,
     (".tga", ".dds"): ImageTab,

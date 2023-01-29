@@ -134,6 +134,14 @@ class FileList(QListWidget):
 
         self.main.filter_list()
 
+class TabWidget(QTabWidget):
+    def remove_tab(self, index):
+        widget = self.widget(index)
+        if widget is not None:
+            widget.deleteLater()
+    
+        self.removeTab(index)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -161,7 +169,7 @@ class MainWindow(QMainWindow):
         self.search_button.clicked.connect(self.filter_list)
         search_layout.addWidget(self.search_button, stretch=1)
 
-        self.tabs = QTabWidget(self)
+        self.tabs = TabWidget(self)
         self.tabs.setElideMode(Qt.TextElideMode.ElideLeft)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
@@ -355,6 +363,9 @@ class MainWindow(QMainWindow):
         self.listwidget.update_list()
         self.update_archive_name()
 
+    def _remove_tab(self, index):
+        self.tabs.remove_tab(index)
+
     def show_help(self):
         string = HELP_STRING.format(
             shortcuts="\n".join(
@@ -526,7 +537,7 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentIndex(self.tabs.count() - 1)
 
             if self.tabs.tabText(0) == preview_name(name):
-                self.tabs.removeTab(0)
+                self._remove_tab(0)
 
     def file_single_clicked(self):
         name = self.listwidget.currentItem().text()
@@ -543,7 +554,7 @@ class MainWindow(QMainWindow):
                 return
 
             if is_preview(self.tabs.tabText(0)):
-                self.tabs.removeTab(0)
+                self._remove_tab(0)
 
             self.tabs.insertTab(0, tab, preview_name(name))
             self.tabs.setCurrentIndex(0)
@@ -568,8 +579,7 @@ class MainWindow(QMainWindow):
             if ret == QMessageBox.StandardButton.No:
                 return
 
-        self.tabs.widget(index).deleteLater()
-        self.tabs.removeTab(index)
+        self._remove_tab(index)
 
     def close_unsaved(self):
         unsaved_tabs = any(is_unsaved(self.tabs.tabText(i)) for i in range(self.tabs.count()))
@@ -584,7 +594,9 @@ class MainWindow(QMainWindow):
             if ret == QMessageBox.StandardButton.No:
                 return False
 
-        self.tabs.clear()
+        for t in range(self.tabs.count()):
+            self._remove_tab(t)
+
         return True
 
     def closeEvent(self, event):

@@ -5,6 +5,7 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Read support for more than just text files including:
     * Music files (currently disabled)
     * CAH files
+    * Maps and Base files including editing!
 * Smoother navigation
 * Open source
 * Syntax Highlighting
