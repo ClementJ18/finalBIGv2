@@ -51,6 +51,7 @@ class FileList(QListWidget):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
         self.main: MainWindow = parent
 
@@ -85,7 +86,7 @@ class FileList(QListWidget):
                 ret = QMessageBox.question(
                     self,
                     "Overwrite file?",
-                    f"{name} already exists, overwrite?",
+                    f"<b>{name}</b> already exists, overwrite?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.YesToAll,
                     QMessageBox.StandardButton.No,
                 )
@@ -283,13 +284,13 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(add_dir_action)
         add_dir_action.triggered.connect(self.add_directory)
 
-        delete_action = QAction("Delete file", self)
+        delete_action = QAction("Delete selection", self)
         edit_menu.addAction(delete_action)
         delete_action.triggered.connect(self.delete)
 
         edit_menu.addSeparator()
 
-        extract_action = QAction("Extract file", self)
+        extract_action = QAction("Extract selection", self)
         edit_menu.addAction(extract_action)
         extract_action.triggered.connect(self.extract)
 
@@ -318,7 +319,7 @@ class MainWindow(QMainWindow):
         help_action.triggered.connect(self.show_help)
 
     def is_file_selected(self):
-        if self.listwidget.currentItem() is None:
+        if not self.listwidget.selectedItems():
             QMessageBox.warning(self, "No file selected", "You have not selected a file")
             return False
 
@@ -468,37 +469,49 @@ class MainWindow(QMainWindow):
         if not self.is_file_selected():
             return
 
-        item = self.listwidget.currentItem()
-        name = item.text()
-        ret = QMessageBox.question(
-            self,
-            "Delete file?",
-            f"Are you sure you want to delete {name}?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if ret == QMessageBox.StandardButton.No:
-            return
+        items = self.listwidget.selectedItems()
 
-        self.archive.remove_file(name)
+        skip_all = False
+        for item in items:
+            name = item.text()
+            if not skip_all:
+                ret = QMessageBox.question(
+                    self,
+                    "Delete file?",
+                    f"Are you sure you want to delete <b>{name}</b>?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.YesToAll,
+                    QMessageBox.StandardButton.No,
+                )
+                if ret == QMessageBox.StandardButton.No:
+                    continue
+
+                if ret == QMessageBox.StandardButton.YesToAll:
+                    skip_all = True
+
+            self.archive.remove_file(name)
+
         self.listwidget.update_list()
+        QMessageBox.information(self, "Done", "File selection has been deleted")
 
     def extract(self):
         if not self.is_file_selected():
             return
 
-        name = self.listwidget.currentItem().text()
-        file_name = name.split("\\")[-1]
-        path = QFileDialog.getSaveFileName(
-            self, "Extract file", file_name
-        )[0]
-        if not path:
-            return
+        items = self.listwidget.selectedItems()
+        
+        for item in items:
+            name = item.text()
+            file_name = name.split("\\")[-1]
+            path = QFileDialog.getSaveFileName(
+                self, "Extract file", file_name
+            )[0]
+            if not path:
+                continue
 
-        with open(path, "wb") as f:
-            f.write(self.archive.read_file(name))
+            with open(path, "wb") as f:
+                f.write(self.archive.read_file(name))
 
-        QMessageBox.information(self, "Done", "File has been extracted")
+        QMessageBox.information(self, "Done", "File selection has been extracted")
 
     def extract_all(self):
         path = QFileDialog.getExistingDirectory(
