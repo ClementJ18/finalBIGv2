@@ -148,13 +148,19 @@ class ImageTab(GenericTab):
     def generate_layout(self):
         layout = QVBoxLayout()
 
-        img = Image.open(io.BytesIO(self.data))
-        self.image = QPixmap.fromImage(ImageQt(img))
+        try:
+            img = Image.open(io.BytesIO(self.data))
+            self.image = QPixmap.fromImage(ImageQt(img))
 
-        self.label = QLabel(self)
-        self.label.setScaledContents(True)
-        self.label.setPixmap(self.image)
-        layout.addWidget(self.label)
+            self.label = QLabel(self)
+            self.label.setScaledContents(True)
+            self.label.setPixmap(self.image)
+            layout.addWidget(self.label)
+        except Exception as e:
+            data = QTextEdit(self)
+            data.setReadOnly(True)
+            data.setText(f"Couldn't convert image:\n{e}")
+            layout.addWidget(data)
 
         self.setLayout(layout)
 

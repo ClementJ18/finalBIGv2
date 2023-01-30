@@ -71,10 +71,10 @@ class FileList(QListWidget):
         md = event.mimeData()
         if md.hasUrls():
             for url in md.urls():
-                if os.path.isfile(url.path()):
-                    self.add_file(url.path())
+                if os.path.isfile(url.toLocalFile()):
+                    self.add_file(url.toLocalFile())
                 else:
-                    self.add_folder(url.path())
+                    self.add_folder(url.toLocalFile())
 
             self.update_list()
             event.acceptProposedAction()
@@ -109,7 +109,7 @@ class FileList(QListWidget):
 
     def add_file(self, url, blank=False):
         name, ok = QInputDialog.getText(
-            self, "Filename", "Save the file under the following name:", text=url
+            self, "Filename", "Save the file under the following name:", text=normalize_name(url)   
         )
         if not ok:
             return False
@@ -288,6 +288,10 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(delete_action)
         delete_action.triggered.connect(self.delete)
 
+        rename_action = QAction("Rename file", self)
+        edit_menu.addAction(rename_action)
+        rename_action.triggered.connect(self.rename)
+
         edit_menu.addSeparator()
 
         extract_action = QAction("Extract selection", self)
@@ -333,7 +337,7 @@ class MainWindow(QMainWindow):
 
     def _save(self, path):
         if path is None:
-            path = QFileDialog.getSaveFileName(self, "Save archive")[0]
+            path = QFileDialog.getSaveFileName(self, "Save archive", "", "BIG files (*.big)")[0]
 
         if not path:
             return
@@ -493,6 +497,34 @@ class MainWindow(QMainWindow):
         self.listwidget.update_list()
         QMessageBox.information(self, "Done", "File selection has been deleted")
 
+    def clear_preview(self):
+        if self.tabs.count() < 0:
+            return
+
+        name = self.tabs.tabText(0)
+        if is_preview(name):
+            self._remove_tab(0)
+
+    def rename(self):
+        if not self.is_file_selected():
+            return
+
+        original_name = self.listwidget.currentItem().text()
+
+        name, ok = QInputDialog.getText(
+            self, "Filename", f"Rename {original_name} as:", text=original_name   
+        )
+        if not ok:
+            return
+
+        self.clear_preview()
+
+        self.archive.add_file(name, self.archive.read_file(original_name))
+        self.archive.remove_file(original_name)
+
+        self.listwidget.update_list()
+        QMessageBox.information(self, "Done", "File renamed")
+
     def extract(self):
         if not self.is_file_selected():
             return
@@ -554,6 +586,9 @@ class MainWindow(QMainWindow):
 
     def file_single_clicked(self):
         name = self.listwidget.currentItem().text()
+        if not self.archive.file_exists(name):
+            return
+
         for x in range(self.tabs.count()):
             if self.tabs.tabText(x) == name:
                 self.tabs.setCurrentIndex(x)

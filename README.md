@@ -11,9 +11,10 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Syntax Highlighting
 * Filtering by filename
 * Text search in file (including with Regex)
-* Ability to create new files directly in the archive
 * Adapts to dark mode
 * Linux support
+* Select multiple files at once
+* Rename files in place
 * And many more in the future!
 
 At this very early stage I am mostly looking for feedback so if you have any thoughts feel free to open a ticket or find me on discord @Necro#6714. I can usually be found on quite a few BFME/SAGE servers.
@@ -31,9 +32,6 @@ There is also a public download that's semi-regularly updated in case you don't 
 * Auto-compile for Linux does not work
 
 ## To-do
-* Multiple select in file list
-    * Delete selected
-    * Extract selected
 * Right click file list menu
     * Delete file
     * Copy name
