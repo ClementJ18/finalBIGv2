@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 import tempfile
 import threading
 import traceback
@@ -240,7 +241,23 @@ class MapTab(GenericTab):
         super().__init__(tabs, archive, name)
 
         self.observer = None
+        self.map_path = None
         self.tmp = None
+
+    def  gather_map_folder(self):
+        folder = os.path.dirname(self.name)
+        file_name = os.path.splitext(self.name)[0]
+
+        to_extract = [
+            self.name,
+            f"{file_name}.tga",
+            f"{file_name}_art.tga",
+            f"{file_name}_pic.tga",
+            f"{folder}\\map.ini",
+            f"{folder}\\map.str",
+        ]
+
+        return to_extract
 
     def generate_layout(self, preview=False):
         layout = QHBoxLayout()
@@ -256,19 +273,23 @@ class MapTab(GenericTab):
         if preview:
             return
 
-        self.tmp = tempfile.NamedTemporaryFile(mode="wb", delete=False, suffix=self.file_type)
-        self.tmp.write(self.data)
-        self.tmp.close()
+        self.tmp = tempfile.TemporaryDirectory(prefix="map-")
 
-        webbrowser.open(self.tmp.name)
+        for file in self.gather_map_folder():
+            if self.archive.file_exists(file):
+                with open(os.path.join(self.tmp.name, os.path.basename(file)), "wb") as f:
+                    f.write(self.archive.read_file(file))
+
+        self.map_path = os.path.join(self.tmp.name, os.path.basename(self.name))
+        webbrowser.open(self.map_path)
 
         self.observer = Observer()
-        self.observer.schedule(SaveEventHandler(self, self.name, self.tmp.name), os.path.dirname(self.tmp.name))
+        self.observer.schedule(SaveEventHandler(self, self.name, self.map_path), self.tmp.name)
 
         self.observer.start()
 
     def save(self):
-        with open(self.tmp.name, "rb") as f:
+        with open(self.map_path, "rb") as f:
             data = f.read()
             self.archive.edit_file(self.name, data)
             self.data = data
@@ -280,7 +301,7 @@ class MapTab(GenericTab):
     def deleteLater(self) -> None:
         if self.observer is not None:
             self.observer.stop()
-            os.remove(self.tmp.name)
+            shutil.rmtree(self.tmp.name)
 
         return super().deleteLater()
 

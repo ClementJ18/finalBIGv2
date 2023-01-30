@@ -26,6 +26,15 @@ A new build is compiled directly from the source everytime a commit is pushed to
 There is also a public download that's semi-regularly updated in case you don't have a GitHub account: https://www.moddb.com/downloads/finalbigv2
 
 ## Current Limitations
-- Syntax Highlighting gets kinda weird with non-ASCII characters, you can reset it by turning it off and on
-- Audio files are currently not supported until I find a way to bundle ffmpeg
-- Auto-compile for Linux does not work
+* Syntax Highlighting gets kinda weird with non-ASCII characters, you can reset it by turning it off and on
+* Audio files are currently not supported until I find a way to bundle ffmpeg
+* Auto-compile for Linux does not work
+
+## To-do
+* Multiple select in file list
+    * Delete selected
+    * Extract selected
+* Right click file list menu
+    * Delete file
+    * Copy name
+    * Extract file
