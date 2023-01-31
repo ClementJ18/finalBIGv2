@@ -5,8 +5,9 @@ import logging
 
 from pyBIG import Archive
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QIcon
+from PyQt6.QtGui import QKeySequence, QShortcut, QIcon
 from PyQt6.QtWidgets import (
+    QMenu,
     QAbstractItemView,
     QApplication,
     QComboBox,
@@ -52,8 +53,20 @@ class FileList(QListWidget):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.context_menu)
 
         self.main: MainWindow = parent
+
+    def context_menu(self, pos):
+        global_position = self.mapToGlobal(pos)
+         
+        menu = QMenu(self)
+        menu.addAction("Delete selection", self.main.delete)
+        menu.addAction("Rename file", self.main.rename)
+        menu.addAction("Extract selection", self.main.extract)
+
+        menu.exec(global_position)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -253,74 +266,30 @@ class MainWindow(QMainWindow):
     def create_menu(self):
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
-
-        new_action = QAction("New", self)
-        file_menu.addAction(new_action)
-        new_action.triggered.connect(self.new)
-
-        open_action = QAction("Open", self)
-        file_menu.addAction(open_action)
-        open_action.triggered.connect(self.open)
-
-        save_action = QAction("Save", self)
-        file_menu.addAction(save_action)
-        save_action.triggered.connect(self.save)
-
-        save_as_action = QAction("Save as...", self)
-        file_menu.addAction(save_as_action)
-        save_as_action.triggered.connect(self.save_as)
+        file_menu.addAction("New", self.new)
+        file_menu.addAction("Open", self.open)
+        file_menu.addAction("Save", self.save)
+        file_menu.addAction("Save as...", self.save_as)
 
         edit_menu = menu.addMenu("&Edit")
-
-        new_file_action = QAction("New file", self)
-        edit_menu.addAction(new_file_action)
-        new_file_action.triggered.connect(self.new_file)
-
-        add_file_action = QAction("Add file", self)
-        edit_menu.addAction(add_file_action)
-        add_file_action.triggered.connect(self.add_file)
-
-        add_dir_action = QAction("Add directory", self)
-        edit_menu.addAction(add_dir_action)
-        add_dir_action.triggered.connect(self.add_directory)
-
-        delete_action = QAction("Delete selection", self)
-        edit_menu.addAction(delete_action)
-        delete_action.triggered.connect(self.delete)
-
-        rename_action = QAction("Rename file", self)
-        edit_menu.addAction(rename_action)
-        rename_action.triggered.connect(self.rename)
+        edit_menu.addAction("New file", self.new_file)
+        edit_menu.addAction("Add file", self.add_file)
+        edit_menu.addAction("Add directory", self.add_directory)
+        edit_menu.addAction("Delete selection", self.delete)
+        edit_menu.addAction("Rename file", self.rename)
 
         edit_menu.addSeparator()
 
-        extract_action = QAction("Extract selection", self)
-        edit_menu.addAction(extract_action)
-        extract_action.triggered.connect(self.extract)
-
-        extract_all_action = QAction("Extract all", self)
-        edit_menu.addAction(extract_all_action)
-        extract_all_action.triggered.connect(self.extract_all)
-
-        extract_filtered_action = QAction("Extract filtered", self)
-        edit_menu.addAction(extract_filtered_action)
-        extract_filtered_action.triggered.connect(self.extract_filtered)
+        edit_menu.addAction("Extract selection", self.extract)
+        edit_menu.addAction("Extract all", self.extract_all)
+        edit_menu.addAction("Extract filtered", self.extract_filtered)
 
         tools_menu = menu.addMenu("&Tools")
-
-        dump_list_action = QAction("Dump file list", self)
-        tools_menu.addAction(dump_list_action)
-        dump_list_action.triggered.connect(self.dump_list)
+        tools_menu.addAction("Dump file list", self.dump_list)
 
         option_menu = menu.addMenu("&Help")
-
-        about_action = QAction("About", self)
-        option_menu.addAction(about_action)
-        about_action.triggered.connect(self.show_about)
-
-        help_action = QAction("Help", self)
-        option_menu.addAction(help_action)
-        help_action.triggered.connect(self.show_help)
+        option_menu.addAction("About", self.show_about)
+        option_menu.addAction("Help", self.show_help)
 
     def is_file_selected(self):
         if not self.listwidget.selectedItems():
