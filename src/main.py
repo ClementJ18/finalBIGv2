@@ -27,7 +27,7 @@ from tabs import get_tab_from_file_type
 
 from utils import ABOUT_STRING, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name
 
-__version__ = "0.1.7"
+__version__ = "0.1.8"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
