@@ -66,6 +66,7 @@ class FileList(QListWidget):
         menu.addAction("Delete selection", self.main.delete)
         menu.addAction("Rename file", self.main.rename)
         menu.addAction("Extract selection", self.main.extract)
+        menu.addAction("Copy name", self.main.copy_name)
 
         menu.exec(global_position)
 
@@ -297,6 +298,7 @@ class MainWindow(QMainWindow):
 
         tools_menu = menu.addMenu("&Tools")
         tools_menu.addAction("Dump file list", self.dump_list)
+        tools_menu.addAction("Copy file name", self.copy_name)
 
         option_menu = menu.addMenu("&Help")
         option_menu.addAction("About", self.show_about)
@@ -503,6 +505,13 @@ class MainWindow(QMainWindow):
         name = self.tabs.tabText(0)
         if is_preview(name):
             self._remove_tab(0)
+
+    def copy_name(self):
+        if not self.is_file_selected():
+            return
+
+        original_name = self.listwidget.currentItem().text()
+        app.clipboard().setText(original_name)
 
     def rename(self):
         if not self.is_file_selected():
