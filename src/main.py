@@ -5,7 +5,7 @@ import logging
 
 from pyBIG import Archive
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QKeySequence, QShortcut, QIcon
+from PyQt6.QtGui import QKeySequence, QShortcut, QIcon, QAction
 from PyQt6.QtWidgets import (
     QMenu,
     QAbstractItemView,
@@ -23,8 +23,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from tabs import get_tab_from_file_type
+import qdarktheme
 
+from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name
 
 __version__ = "0.1.8"
@@ -163,6 +164,8 @@ class MainWindow(QMainWindow):
         self.base_name = "FinalBIG v2"
         self.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
 
+        self.dark_mode = False
+
         layout = QVBoxLayout()
 
         self.listwidget = FileList(self)
@@ -224,6 +227,14 @@ class MainWindow(QMainWindow):
             (
                 "Double-click on file",
                 "Edit file"
+            ),
+            (
+                "Left-click drag",
+                "Select multiple files"
+            ),
+            (
+                "Right-click on file/selection",
+                "Context menu"
             ),
             (
                 QShortcut(QKeySequence("CTRL+N",),self,self.new,),
@@ -291,6 +302,12 @@ class MainWindow(QMainWindow):
         option_menu.addAction("About", self.show_about)
         option_menu.addAction("Help", self.show_help)
 
+        option_menu.addSeparator()
+
+        self.dark_mode_action = QAction("Dark Mode", self, checkable=True)
+        option_menu.addAction(self.dark_mode_action)
+        option_menu.triggered.connect(self.toggle_dark_mode)
+
     def is_file_selected(self):
         if not self.listwidget.selectedItems():
             QMessageBox.warning(self, "No file selected", "You have not selected a file")
@@ -350,6 +367,19 @@ class MainWindow(QMainWindow):
 
     def show_about(self):
         QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))
+
+    def toggle_dark_mode(self):
+        if self.dark_mode_action.isChecked():
+            qdarktheme.setup_theme("dark", corner_shape="sharp")
+            self.dark_mode = True
+        else:
+            qdarktheme.setup_theme("light", corner_shape="sharp")
+            self.dark_mode = False
+
+        for x in range(self.tabs.count()):
+            widget = self.tabs.widget(x)
+            if hasattr(widget, "text_widget"):
+                widget.text_widget.toggle_dark_mode(self.dark_mode)
 
     def dump_list(self):
         file = QFileDialog.getSaveFileName(self, "Save dump")[0]
@@ -544,7 +574,7 @@ class MainWindow(QMainWindow):
                 self.tabs.setCurrentIndex(x)
                 break
         else:
-            tab = get_tab_from_file_type(name)(self.tabs, self.archive, name)
+            tab = get_tab_from_file_type(name)(self, self.archive, name)
             tab.generate_layout()
 
             self.tabs.addTab(tab, name)
@@ -563,7 +593,7 @@ class MainWindow(QMainWindow):
                 self.tabs.setCurrentIndex(x)
                 break
         else:
-            tab = get_tab_from_file_type(name)(self.tabs, self.archive, name)
+            tab = get_tab_from_file_type(name)(self, self.archive, name)
             tab.generate_preview()
 
             if self.tabs.currentIndex() < 0:
@@ -627,6 +657,8 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MainWindow()
 
+    qdarktheme.setup_theme("auto", corner_shape="sharp")
+    
     app.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
 
     w.show()

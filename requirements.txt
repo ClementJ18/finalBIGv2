@@ -13,3 +13,4 @@ tbm-utils==2.6.0
 pyBIG==0.1.5
 darkdetect==0.8.0
 https://github.com/gorakhargosh/watchdog/archive/3140f52537f9bc801d1b812ed6ded3cb36695933.tar.gz
+pyqtdarktheme==2.1.0

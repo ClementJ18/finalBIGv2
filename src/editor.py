@@ -103,9 +103,9 @@ class Commenter:
 
 
 class LexerBFME(QsciLexerCustom):
-    def __init__(self, parent) -> None:
+    def __init__(self, parent, dark_mode) -> None:
         super().__init__(parent)
-        self.dark_mode = darkdetect.isDark()
+        self.dark_mode = dark_mode
         self.first_pass = True
         self.toggled = True
         self.update_colors()
@@ -124,6 +124,8 @@ class LexerBFME(QsciLexerCustom):
             self.setColor(QColor(226, 103, 0, 0.8), 9)
 
             self.parent().setCaretForegroundColor(QColor(255, 255, 255, 0.3))
+            self.setPaper(QColor(0, 0, 0, 0))
+            self.setDefaultPaper(QColor(0, 0, 0, 0))
         else:
             self.setColor(QColor(0, 0, 0, 0.8), 0)  # Style 0: black
             self.setColor(QColor(105, 40, 124, 0.8), 1)  # Style 1: purple
@@ -137,6 +139,8 @@ class LexerBFME(QsciLexerCustom):
             self.setColor(QColor(226, 103, 0, 0.8), 9)
 
             self.parent().setCaretForegroundColor(QColor(0, 0, 0, 0.8))
+            self.setPaper(QColor(255, 255, 255, 0.3))
+            self.setDefaultPaper(QColor(255, 255, 255, 0.3))
 
     def language(self) -> str:
         return "BFMEini"
@@ -209,7 +213,7 @@ class LexerBFME(QsciLexerCustom):
 
 
 class Editor(QsciScintilla):
-    def __init__(self, file_name):
+    def __init__(self, file_name, dark_mode):
         super().__init__()
 
         self.setWrapMode(QsciScintilla.WrapMode.WrapNone)
@@ -234,7 +238,7 @@ class Editor(QsciScintilla):
         elif self.file_type == ".xml":
             self.lexer = QsciLexerXML(self)
         elif self.file_type in [".ini", ".inc"]:
-            self.lexer = LexerBFME(self)
+            self.lexer = LexerBFME(self, dark_mode)
 
         self.setLexer(self.lexer)
 
@@ -242,7 +246,7 @@ class Editor(QsciScintilla):
         QShortcut(QKeySequence("Ctrl+;"), self, self.commenter.toggle_comments)
 
     def toggle_highlighting(self, state):
-        if self.lexer is None:
+        if not isinstance(self.lexer, LexerBFME):
             return
 
         self.lexer.toggled = state
@@ -253,7 +257,7 @@ class Editor(QsciScintilla):
             self.lexer.setStyling(len(self.text()), 0)
 
     def toggle_dark_mode(self, state):
-        if self.lexer is None:
+        if not isinstance(self.lexer, LexerBFME):
             return
 
         self.lexer.dark_mode = state

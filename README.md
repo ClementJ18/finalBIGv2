@@ -34,3 +34,9 @@ There is also a public download that's semi-regularly updated in case you don't 
 
 ## To-do
 * User plugins?
+* Reduce lag from previewing large files
+* User settings?
+    * Preview
+    * Dark mode
+    * Encoding
+* Clear preview when file deleted

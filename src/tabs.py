@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QTabWidget,
+    QMainWindow,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -33,11 +33,11 @@ from editor import Editor
 from utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
 
 class GenericTab(QWidget):
-    def __init__(self, tabs : QTabWidget, archive : Archive, name):
+    def __init__(self, main : QMainWindow, archive : Archive, name):
         super().__init__()
 
         self.archive = archive
-        self.tabs = tabs
+        self.main = main
 
         self.name = name
         self.file_type = os.path.splitext(name)[1]
@@ -63,7 +63,7 @@ class GenericTab(QWidget):
 class TextTab(GenericTab):
     def generate_layout(self):
         layout = QVBoxLayout()
-        self.text_widget = Editor(self.name)
+        self.text_widget = Editor(self.name, self.main.dark_mode)
 
         self.text_widget.setText(decode_string(self.data))
         self.text_widget.textChanged.connect(self.text_changed)
@@ -83,10 +83,10 @@ class TextTab(GenericTab):
             search_layout.addWidget(highlighting)
             highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
 
-            dark_mode = QCheckBox("Dark Mode")
-            dark_mode.setChecked(self.text_widget.lexer.dark_mode)
-            search_layout.addWidget(dark_mode)
-            dark_mode.stateChanged.connect(self.text_widget.toggle_dark_mode)
+            # dark_mode = QCheckBox("Dark Mode")
+            # dark_mode.setChecked(self.text_widget.lexer.dark_mode)
+            # search_layout.addWidget(dark_mode)
+            # dark_mode.stateChanged.connect(self.text_widget.toggle_dark_mode)
 
         self.search = QComboBox(self)
         self.search.setEditable(True)
@@ -133,15 +133,15 @@ class TextTab(GenericTab):
 
     def save(self):
         self.archive.edit_file(self.name, encode_string(self.text_widget.text()))
-        self.tabs.setTabText(self.tabs.currentIndex(), self.name)
+        self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
 
     def text_changed(self):
-        self.tabs.setTabText(self.tabs.currentIndex(), unsaved_name(self.name))
+        self.main.tabs.setTabText(self.main.tabs.currentIndex(), unsaved_name(self.name))
 
 
 class ImageTab(GenericTab):
-    def __init__(self, tabs: QTabWidget, archive: Archive, name):
-        super().__init__(tabs, archive, name)
+    def __init__(self, main: QMainWindow, archive: Archive, name):
+        super().__init__(main, archive, name)
 
         self.scale = 1
 
@@ -149,8 +149,8 @@ class ImageTab(GenericTab):
         layout = QVBoxLayout()
 
         try:
-            img = Image.open(io.BytesIO(self.data))
-            self.image = QPixmap.fromImage(ImageQt(img))
+            self.img = Image.open(io.BytesIO(self.data))
+            self.image = QPixmap.fromImage(ImageQt(self.img))
 
             self.label = QLabel(self)
             self.label.setScaledContents(True)
@@ -243,8 +243,8 @@ class SaveEventHandler(FileSystemEventHandler):
     
 
 class MapTab(GenericTab):
-    def __init__(self, tabs: QTabWidget, archive: Archive, name):
-        super().__init__(tabs, archive, name)
+    def __init__(self, main: QMainWindow, archive: Archive, name):
+        super().__init__(main, archive, name)
 
         self.observer = None
         self.map_path = None
@@ -301,8 +301,8 @@ class MapTab(GenericTab):
             self.data = data
 
     def delete(self):
-        index = self.tabs.indexOf(self)
-        self.tabs.remove_tab(index)
+        index = self.main.tabs.indexOf(self)
+        self.main.tabs.remove_tab(index)
 
     def deleteLater(self) -> None:
         if self.observer is not None:
@@ -320,7 +320,8 @@ TAB_TYPES = {
     (".bse", ".map"): MapTab,
     (".wav",): SoundTab,
     (".cah",): CustomHeroTab,
-    (".tga", ".dds"): ImageTab,
+    # (".tga", ".dds"): ImageTab,
+    tuple(Image.registered_extensions().keys()): ImageTab, # crashes
 }
 
 def get_tab_from_file_type(name : str) -> GenericTab:
