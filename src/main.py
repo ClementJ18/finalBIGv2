@@ -474,11 +474,11 @@ class MainWindow(QMainWindow):
         if not self.is_file_selected():
             return
 
-        items = self.listwidget.selectedItems()
+        names = [item.text() for item in self.listwidget.selectedItems()]
+        preview_names = [preview_name(n) for n in names]
 
         skip_all = False
-        for item in items:
-            name = item.text()
+        for name in names:
             if not skip_all:
                 ret = QMessageBox.question(
                     self,
@@ -494,6 +494,11 @@ class MainWindow(QMainWindow):
                     skip_all = True
 
             self.archive.remove_file(name)
+            
+        for i in reversed(range(self.tabs.count())):
+            name = self.tabs.tabText(i)
+            if name in names or name in preview_names:
+                self.tabs.remove_tab(i)
 
         self.listwidget.update_list()
         QMessageBox.information(self, "Done", "File selection has been deleted")
@@ -525,7 +530,10 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        self.clear_preview()
+        for i in reversed(range(self.tabs.count())):
+            tab_name = self.tabs.tabText(i)
+            if tab_name in (preview_name(name), name):
+                self.tabs.remove_tab(i)
 
         self.archive.add_file(name, self.archive.read_file(original_name))
         self.archive.remove_file(original_name)

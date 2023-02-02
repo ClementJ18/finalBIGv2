@@ -31,6 +31,7 @@ There is also a public download that's semi-regularly updated in case you don't 
 * Syntax Highlighting gets kinda weird with non-ASCII characters, you can reset it by turning it off and on
 * Audio files are currently not supported until I find a way to bundle ffmpeg
 * Auto-compile for Linux does not work
+* The LUA and XML editor don't switch to dark mode
 
 ## To-do
 * User plugins?
@@ -39,4 +40,3 @@ There is also a public download that's semi-regularly updated in case you don't 
     * Preview
     * Dark mode
     * Encoding
-* Clear preview when file deleted

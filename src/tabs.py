@@ -146,23 +146,25 @@ class ImageTab(GenericTab):
         self.scale = 1
 
     def generate_layout(self):
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
 
         try:
-            self.img = Image.open(io.BytesIO(self.data))
-            self.image = QPixmap.fromImage(ImageQt(self.img))
+            self.bytes = io.BytesIO(self.data)
+            self.image = Image.open(self.bytes)
+            self.qimage = ImageQt(self.image)
+            self.pixmap = QPixmap.fromImage(self.qimage)
 
             self.label = QLabel(self)
             self.label.setScaledContents(True)
-            self.label.setPixmap(self.image)
-            layout.addWidget(self.label)
+            self.label.setPixmap(self.pixmap)
+            self.layout.addWidget(self.label)
         except Exception as e:
-            data = QTextEdit(self)
-            data.setReadOnly(True)
-            data.setText(f"Couldn't convert image:\n{e}")
-            layout.addWidget(data)
+            self.error = QTextEdit(self)
+            self.error.setReadOnly(True)
+            self.error.setText(f"Couldn't convert image:\n{e}")
+            self.layout.addWidget(self.error)
 
-        self.setLayout(layout)
+        self.setLayout(self.layout)
 
 class CustomHeroTab(GenericTab):
     def generate_layout(self):
