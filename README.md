@@ -21,7 +21,9 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 
 At this very early stage I am mostly looking for feedback so if you have any thoughts feel free to open a ticket or find me on discord @Necro#6714. I can usually be found on quite a few BFME/SAGE servers.
 
-![Demo of the GUI](demo.png)
+![Demo of the GUI](demo_light.png)
+![Demo of the GUI](demo_dark.png)
+
 
 ## How to download
 A new build is compiled directly from the source everytime a commit is pushed to the repository, you can download it from the [build menu](https://github.com/ClementJ18/finalBIGv2/actions/workflows/main.yml?query=branch%3Amain).
@@ -33,6 +35,7 @@ There is also a public download that's semi-regularly updated in case you don't 
 * Audio files are currently not supported until I find a way to bundle ffmpeg
 * Auto-compile for Linux does not work
 * The LUA and XML editor don't switch to dark mode
+* Line number color of currently open editors does not adapt properly when switching dark/light mode (fix by re-opening tabs)
 
 ## To-do
 * Reduce lag from previewing large files (partially solved by preview setting)

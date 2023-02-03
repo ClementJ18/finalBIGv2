@@ -224,7 +224,7 @@ class Editor(QsciScintilla):
         self.setTabIndents(True)
         self.setAutoIndent(True)
 
-        self.setMarginType(0, QsciScintilla.MarginType.NumberMargin)
+        self.setMarginLineNumbers(0, True)
         self.setMarginWidth(0, "000000")
 
         self.SendScintilla(QsciScintilla.SCI_SETMULTIPLESELECTION, True)

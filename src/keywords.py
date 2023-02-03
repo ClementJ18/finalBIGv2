@@ -3381,4 +3381,12 @@ CODEBLOCKS = [
     "ownershipset",
     "spawnbuildings",
     "locomotor",
+    "armytospawn",
+    "buildingnugget",
+    "livingworldbuilding",
+    "mappedimage",
+    "musictrack",
+    "replacemodule",
+    "addmodule",
+    "removemodule"
 ]

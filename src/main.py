@@ -28,7 +28,7 @@ import qdarktheme
 from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
-__version__ = "0.1.9"
+__version__ = "0.2.0"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
@@ -503,12 +503,11 @@ class MainWindow(QMainWindow):
     def delete(self):
         if not self.is_file_selected():
             return
-
-        names = [item.text() for item in self.listwidget.selectedItems()]
-        preview_names = [preview_name(n) for n in names]
-
+        
+        deleted = []
         skip_all = False
-        for name in names:
+        for item in self.listwidget.selectedItems():
+            name = item.text()
             if not skip_all:
                 ret = QMessageBox.question(
                     self,
@@ -523,11 +522,15 @@ class MainWindow(QMainWindow):
                 if ret == QMessageBox.StandardButton.YesToAll:
                     skip_all = True
 
+            deleted.append((name, preview_name(name)))
             self.archive.remove_file(name)
-            
+        
+        if not deleted:
+            return
+
         for i in reversed(range(self.tabs.count())):
             name = self.tabs.tabText(i)
-            if name in names or name in preview_names:
+            if (name in t for t in deleted):
                 self.tabs.remove_tab(i)
 
         self.listwidget.update_list()
@@ -577,6 +580,7 @@ class MainWindow(QMainWindow):
 
         items = self.listwidget.selectedItems()
         
+        extracted_one = False
         for item in items:
             name = item.text()
             file_name = name.split("\\")[-1]
@@ -589,7 +593,10 @@ class MainWindow(QMainWindow):
             with open(path, "wb") as f:
                 f.write(self.archive.read_file(name))
 
-        QMessageBox.information(self, "Done", "File selection has been extracted")
+            extracted_one = True
+
+        if extracted_one:
+            QMessageBox.information(self, "Done", "File selection has been extracted")
 
     def extract_all(self):
         path = QFileDialog.getExistingDirectory(
