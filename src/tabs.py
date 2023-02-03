@@ -30,7 +30,7 @@ from watchdog.events import FileSystemEventHandler
 
 from cah import CustomHero
 from editor import Editor
-from utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
+from utils import SEARCH_HISTORY_MAX, decode_string, encode_string, str_to_bool, unsaved_name
 
 class GenericTab(QWidget):
     def __init__(self, main : QMainWindow, archive : Archive, name):
@@ -63,9 +63,10 @@ class GenericTab(QWidget):
 class TextTab(GenericTab):
     def generate_layout(self):
         layout = QVBoxLayout()
-        self.text_widget = Editor(self.name, self.main.dark_mode)
+        self.text_widget = Editor(self.name, str_to_bool(self.main.settings.value("settings/dark_mode", "1")))
 
-        self.text_widget.setText(decode_string(self.data))
+        string = decode_string(self.data, self.main.settings.value("settings/encoding", "latin_1"))
+        self.text_widget.setText(string)
         self.text_widget.textChanged.connect(self.text_changed)
 
         layout.addWidget(self.text_widget)
@@ -132,7 +133,8 @@ class TextTab(GenericTab):
             self.search.removeItem(0)
 
     def save(self):
-        self.archive.edit_file(self.name, encode_string(self.text_widget.text()))
+        string = encode_string(self.text_widget.text(), self.settings.value("settings/encoding", "latin_1"))
+        self.archive.edit_file(self.name, string)
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
 
     def text_changed(self):
@@ -171,7 +173,7 @@ class CustomHeroTab(GenericTab):
         layout = QHBoxLayout()
 
         try:
-            cah = CustomHero(self.data)
+            cah = CustomHero(self.data, self.main.settings.value("settings/encoding", "latin_1"))
 
             powers = "\n".join(
                 f"\t- Level {level+1}: {power} (index: {index})"

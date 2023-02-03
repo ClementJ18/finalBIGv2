@@ -4,7 +4,7 @@ import sys
 import logging
 
 from pyBIG import Archive
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QKeySequence, QShortcut, QIcon, QAction
 from PyQt6.QtWidgets import (
     QMenu,
@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 import qdarktheme
 
 from tabs import get_tab_from_file_type
-from utils import ABOUT_STRING, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name
+from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
 __version__ = "0.1.9"
 
@@ -165,7 +165,13 @@ class MainWindow(QMainWindow):
         self.base_name = "FinalBIG v2"
         self.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
 
-        self.dark_mode = False
+        self.settings = QSettings("Necro inc.", "FinalBIGv2")
+
+        if str_to_bool(self.settings.value("settings/dark_mode", "1")):
+            qdarktheme.setup_theme("dark", corner_shape="sharp")
+        else:
+            qdarktheme.setup_theme("light", corner_shape="sharp")
+
 
         layout = QVBoxLayout()
 
@@ -306,9 +312,17 @@ class MainWindow(QMainWindow):
 
         option_menu.addSeparator()
 
-        self.dark_mode_action = QAction("Dark Mode", self, checkable=True)
+        self.dark_mode_action = QAction("Dark Mode?", self, checkable=True)
+        self.dark_mode_action.setChecked(str_to_bool(self.settings.value("settings/dark_mode", "1")))
         option_menu.addAction(self.dark_mode_action)
         option_menu.triggered.connect(self.toggle_dark_mode)
+
+        self.preview_action = QAction("Preview?", self, checkable=True)
+        self.preview_action.setChecked(str_to_bool(self.settings.value("settings/preview", "1")))
+        option_menu.addAction(self.preview_action)
+        option_menu.triggered.connect(self.toggle_preview)
+
+        option_menu.addAction("Set encoding", self.set_encoding)
 
     def is_file_selected(self):
         if not self.listwidget.selectedItems():
@@ -370,18 +384,34 @@ class MainWindow(QMainWindow):
     def show_about(self):
         QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))
 
+    def set_encoding(self):
+        setting = self.settings.value("settings/encoding", "latin_1")
+        name, ok = QInputDialog.getItem(self, "Encoding", "Select an encoding", ENCODING_LIST, ENCODING_LIST.index(setting), False)
+        if not ok:
+            return
+
+        self.settings.setValue("settings/encoding", name)
+        self.settings.sync()
+
+    def toggle_preview(self):
+        self.settings.setValue("settings/preview", int(self.preview_action.isChecked()))
+        self.settings.sync()
+
     def toggle_dark_mode(self):
-        if self.dark_mode_action.isChecked():
+        is_checked = self.dark_mode_action.isChecked()
+        
+        self.settings.setValue("settings/dark_mode", int(is_checked))
+        self.settings.sync()
+        
+        if is_checked:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
-            self.dark_mode = True
         else:
             qdarktheme.setup_theme("light", corner_shape="sharp")
-            self.dark_mode = False
 
         for x in range(self.tabs.count()):
             widget = self.tabs.widget(x)
             if hasattr(widget, "text_widget"):
-                widget.text_widget.toggle_dark_mode(self.dark_mode)
+                widget.text_widget.toggle_dark_mode(is_checked)
 
     def dump_list(self):
         file = QFileDialog.getSaveFileName(self, "Save dump")[0]
@@ -601,6 +631,9 @@ class MainWindow(QMainWindow):
                 self._remove_tab(0)
 
     def file_single_clicked(self):
+        if not str_to_bool(self.settings.value("settings/preview", "1")):
+            return
+
         name = self.listwidget.currentItem().text()
         if not self.archive.file_exists(name):
             return
@@ -673,8 +706,6 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MainWindow()
-
-    qdarktheme.setup_theme("auto", corner_shape="sharp")
     
     app.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
 

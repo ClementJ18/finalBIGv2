@@ -16,6 +16,7 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Select multiple files at once from the list with shift, ctrl or just by dragging
 * Rename files in place
 * Right click menu for ease of access in the file list
+* User settings for persistent customisation
 * And many more in the future!
 
 At this very early stage I am mostly looking for feedback so if you have any thoughts feel free to open a ticket or find me on discord @Necro#6714. I can usually be found on quite a few BFME/SAGE servers.
@@ -34,9 +35,4 @@ There is also a public download that's semi-regularly updated in case you don't 
 * The LUA and XML editor don't switch to dark mode
 
 ## To-do
-* User plugins?
-* Reduce lag from previewing large files
-* User settings?
-    * Preview
-    * Dark mode
-    * Encoding
+* Reduce lag from previewing large files (partially solved by preview setting)
