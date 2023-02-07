@@ -632,7 +632,9 @@ class MainWindow(QMainWindow):
             tab.generate_layout()
 
             self.tabs.addTab(tab, name)
-            self.tabs.setCurrentIndex(self.tabs.count() - 1)
+            index = self.tabs.count() - 1
+            self.tabs.setTabToolTip(index, name)
+            self.tabs.setCurrentIndex(index)
 
             if self.tabs.tabText(0) == preview_name(name):
                 self._remove_tab(0)
@@ -653,14 +655,11 @@ class MainWindow(QMainWindow):
             tab = get_tab_from_file_type(name)(self, self.archive, name)
             tab.generate_preview()
 
-            if self.tabs.currentIndex() < 0:
-                self.tabs.addTab(tab, preview_name(name))
-                return
-
-            if is_preview(self.tabs.tabText(0)):
+            if is_preview(self.tabs.tabText(0)) and self.tabs.currentIndex() >= 0:
                 self._remove_tab(0)
 
             self.tabs.insertTab(0, tab, preview_name(name))
+            self.tabs.setTabToolTip(0, preview_name(name))
             self.tabs.setCurrentIndex(0)
         
 

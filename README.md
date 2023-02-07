@@ -39,3 +39,5 @@ There is also a public download that's semi-regularly updated in case you don't 
 
 ## To-do
 * Reduce lag from previewing large files (partially solved by preview setting)
+* W3D preview
+* Map preview

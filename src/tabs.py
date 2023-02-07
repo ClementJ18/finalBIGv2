@@ -311,7 +311,7 @@ class MapTab(GenericTab):
     def deleteLater(self) -> None:
         if self.observer is not None:
             self.observer.stop()
-            shutil.rmtree(self.tmp.name)
+            shutil.rmtree(self.tmp.name, True)
 
         return super().deleteLater()
 
@@ -324,8 +324,7 @@ TAB_TYPES = {
     (".bse", ".map"): MapTab,
     (".wav",): SoundTab,
     (".cah",): CustomHeroTab,
-    # (".tga", ".dds"): ImageTab,
-    tuple(Image.registered_extensions().keys()): ImageTab, # crashes
+    tuple(Image.registered_extensions().keys()): ImageTab
 }
 
 def get_tab_from_file_type(name : str) -> GenericTab:

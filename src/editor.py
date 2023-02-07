@@ -237,7 +237,7 @@ class Editor(QsciScintilla):
             self.lexer = QsciLexerLua(self)
         elif self.file_type == ".xml":
             self.lexer = QsciLexerXML(self)
-        elif self.file_type in [".ini", ".inc"]:
+        elif self.file_type in (".ini", ".inc"):
             self.lexer = LexerBFME(self, dark_mode)
 
         self.setLexer(self.lexer)
