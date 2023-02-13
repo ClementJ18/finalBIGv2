@@ -28,7 +28,7 @@ import qdarktheme
 from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")

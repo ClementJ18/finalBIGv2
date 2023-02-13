@@ -133,7 +133,7 @@ class TextTab(GenericTab):
             self.search.removeItem(0)
 
     def save(self):
-        string = encode_string(self.text_widget.text(), self.settings.value("settings/encoding", "latin_1"))
+        string = encode_string(self.text_widget.text(), self.main.settings.value("settings/encoding", "latin_1"))
         self.archive.edit_file(self.name, string)
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
 
