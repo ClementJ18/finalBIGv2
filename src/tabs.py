@@ -78,16 +78,11 @@ class TextTab(GenericTab):
         search_layout = QHBoxLayout()
         search_widget.setLayout(search_layout)
 
-        if self.file_type in [".inc", ".ini"]:
+        if self.file_type in (".inc", ".ini"):
             highlighting = QCheckBox("Highlighting")
             highlighting.setChecked(True)
             search_layout.addWidget(highlighting)
             highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
-
-            # dark_mode = QCheckBox("Dark Mode")
-            # dark_mode.setChecked(self.text_widget.lexer.dark_mode)
-            # search_layout.addWidget(dark_mode)
-            # dark_mode.stateChanged.connect(self.text_widget.toggle_dark_mode)
 
         self.search = QComboBox(self)
         self.search.setEditable(True)
@@ -131,6 +126,8 @@ class TextTab(GenericTab):
 
         if self.search.count() > SEARCH_HISTORY_MAX:
             self.search.removeItem(0)
+
+        self.search.setFocus()
 
     def save(self):
         string = encode_string(self.text_widget.text(), self.main.settings.value("settings/encoding", "latin_1"))

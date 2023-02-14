@@ -211,6 +211,55 @@ class LexerBFME(QsciLexerCustom):
                 else:
                     self.setStyling(token[1], 0)
 
+class DefaultLexer(QsciLexerCustom):
+    def __init__(self, parent, dark_mode) -> None:
+        super().__init__(parent)
+        self.dark_mode = dark_mode
+        self.first_pass = True
+        self.toggled = True
+        self.update_colors()
+
+    def update_colors(self):
+        if self.dark_mode:
+            self.setColor(QColor(232, 232, 232, 1), 0)  # Style 0: light grey
+            self.setColor(QColor(142, 79, 161, 0.8), 1)  # Style 1: purple
+            self.setColor(QColor(222, 133, 222, 0.8), 2)  # Style 2: violet
+            self.setColor(QColor(0, 135, 0, 0.8), 3)  # Style 3: green
+            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
+            self.setColor(QColor(101, 87, 198, 0.8), 5)  # Style 5: Blue
+            self.setColor(QColor(216, 210, 75, 0.8), 6)
+            self.setColor(QColor(101, 187, 105, 0.8), 7)
+            self.setColor(QColor(101, 176, 187, 0.8), 8)
+            self.setColor(QColor(226, 103, 0, 0.8), 9)
+
+            self.parent().setCaretForegroundColor(QColor(255, 255, 255, 0.3))
+            self.setPaper(QColor(0, 0, 0, 0))
+            self.setDefaultPaper(QColor(0, 0, 0, 0))
+        else:
+            self.setColor(QColor(0, 0, 0, 0.8), 0)  # Style 0: black
+            self.setColor(QColor(105, 40, 124, 0.8), 1)  # Style 1: purple
+            self.setColor(QColor(13, 0, 161, 0.8), 2)  # Style 2: blue
+            self.setColor(QColor(59, 125, 61, 1), 3)  # Style 3: green
+            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
+            self.setColor(QColor(50, 34, 166, 0.8), 5)  # Style 5: Blue
+            self.setColor(QColor(216, 210, 75, 0.8), 6)
+            self.setColor(QColor(101, 187, 105, 0.8), 7)
+            self.setColor(QColor(101, 176, 187, 0.8), 8)
+            self.setColor(QColor(226, 103, 0, 0.8), 9)
+
+            self.parent().setCaretForegroundColor(QColor(0, 0, 0, 0.8))
+            self.setPaper(QColor(255, 255, 255, 0.3))
+            self.setDefaultPaper(QColor(255, 255, 255, 0.3))
+
+    def language(self) -> str:
+        return "BFMEstr"
+
+    def description(self, style: int) -> str:
+        return f"Style_{style}"
+
+    def styleText(self, start: int, end: int) -> None:
+        pass
+
 
 class Editor(QsciScintilla):
     def __init__(self, file_name, dark_mode):
@@ -232,7 +281,7 @@ class Editor(QsciScintilla):
         self.SendScintilla(QsciScintilla.SCI_SETADDITIONALSELECTIONTYPING, True)
 
         self.file_type = os.path.splitext(file_name)[1]
-        self.lexer = None
+        self.lexer = DefaultLexer(self, dark_mode)
         if self.file_type == ".lua":
             self.lexer = QsciLexerLua(self)
         elif self.file_type == ".xml":
@@ -246,7 +295,7 @@ class Editor(QsciScintilla):
         QShortcut(QKeySequence("Ctrl+;"), self, self.commenter.toggle_comments)
 
     def toggle_highlighting(self, state):
-        if not isinstance(self.lexer, LexerBFME):
+        if not isinstance(self.lexer, QsciLexerCustom):
             return
 
         self.lexer.toggled = state
@@ -257,7 +306,7 @@ class Editor(QsciScintilla):
             self.lexer.setStyling(len(self.text()), 0)
 
     def toggle_dark_mode(self, state):
-        if not isinstance(self.lexer, LexerBFME):
+        if not isinstance(self.lexer, QsciLexerCustom):
             return
 
         self.lexer.dark_mode = state
