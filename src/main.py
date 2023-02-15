@@ -51,12 +51,13 @@ sys.excepthook = handle_exception
 class ArchiveSearchThread(QThread):
     matched = pyqtSignal(tuple)
 
-    def __init__(self, parent, search, encoding, archive) -> None:
+    def __init__(self, parent, search, encoding, archive, regex) -> None:
         super().__init__(parent)
 
         self.search = search
         self.encoding = encoding
         self.archive = archive
+        self.regex = regex
 
     def run(self):
         matches = []
@@ -64,7 +65,7 @@ class ArchiveSearchThread(QThread):
 
         self.archive.archive.seek(0)
         buffer = self.archive.archive.read().decode(self.encoding)
-        indexes = {match.start() for match in re.finditer(self.search, buffer)}
+        indexes = {match.start() for match in re.finditer(self.search if self.regex else re.escape(self.search), buffer)}
         match_count = len(indexes)
         
         for name, entry in self.archive.entries.items():
@@ -333,8 +334,15 @@ class MainWindow(QMainWindow):
         tools_menu = menu.addMenu("&Tools")
         tools_menu.addAction("Dump entire file list", lambda: self.dump_list(False))
         tools_menu.addAction("Dump filtered file list", lambda: self.dump_list(True))
+
+        tools_menu.addSeparator()
+
         tools_menu.addAction("Copy file name", self.copy_name)
-        tools_menu.addAction("Find text in archive", self.search_archive)
+
+        tools_menu.addSeparator()
+
+        tools_menu.addAction("Find text in archive", lambda: self.search_archive(False))
+        tools_menu.addAction("Find text in archive (REGEX)", lambda: self.search_archive(True))
 
         option_menu = menu.addMenu("&Help")
         option_menu.addAction("About", self.show_about)
@@ -473,9 +481,9 @@ class MainWindow(QMainWindow):
 
         QMessageBox.information(self, "Dump Generated", "File list dump has been created")
 
-    def search_archive(self):
+    def search_archive(self, regex):
         search, ok = QInputDialog.getText(
-            self, "Filename", f"Search keyword (Regex)"   
+            self, "Search archive", f"Search keyword {'(Regex)' if regex else ''}",   
         )
         if not ok:
             return
@@ -493,7 +501,7 @@ class MainWindow(QMainWindow):
         self.message_box = QMessageBox(QMessageBox.Icon.Information, "Search in progress", "Searching the archive, please wait...", QMessageBox.StandardButton.Ok, self)
         self.message_box.button(QMessageBox.StandardButton.Ok).setEnabled(False)
 
-        self.thread = ArchiveSearchThread(self, search, self.encoding, self.archive)
+        self.thread = ArchiveSearchThread(self, search, self.encoding, self.archive, regex)
         self.thread.matched.connect(update_list_with_matches)
         self.thread.start()
         self.message_box.exec()
