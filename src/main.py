@@ -49,7 +49,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 sys.excepthook = handle_exception
 
 class ArchiveSearchThread(QThread):
-    matched = pyqtSignal(list)
+    matched = pyqtSignal(tuple)
 
     def __init__(self, parent, search, encoding, archive) -> None:
         super().__init__(parent)
@@ -65,6 +65,7 @@ class ArchiveSearchThread(QThread):
         self.archive.archive.seek(0)
         buffer = self.archive.archive.read().decode(self.encoding)
         indexes = {match.start() for match in re.finditer(self.search, buffer)}
+        match_count = len(indexes)
         
         for name, entry in self.archive.entries.items():
             matched_indexes = {index for index in indexes if entry.position <= index <= (entry.position + entry.size)}
@@ -73,7 +74,7 @@ class ArchiveSearchThread(QThread):
                 matches.append(name)
                 continue
 
-        self.matched.emit(matches)
+        self.matched.emit((matches, match_count))
 
 class FileList(QListWidget):
     def __init__(self, parent):
@@ -479,13 +480,14 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
-        def update_list_with_matches(matches):
+        def update_list_with_matches(returned):
+            matches = returned[0]
             for x in range(self.listwidget.count()):
                 item = self.listwidget.item(x)
                 item.setHidden(item.text() not in matches)
 
             self.message_box.done(1)
-            QMessageBox.information(self, "Search finishes", "List of files has been filtered with matches")
+            QMessageBox.information(self, "Search finished", f"Found <b>{returned[1]}</b> instances over <b>{len(matches)}</b> files. Filtering list.")
 
 
         self.message_box = QMessageBox(QMessageBox.Icon.Information, "Search in progress", "Searching the archive, please wait...", QMessageBox.StandardButton.Ok, self)
