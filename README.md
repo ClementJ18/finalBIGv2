@@ -22,8 +22,8 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 
 At this very early stage I am mostly looking for feedback so if you have any thoughts feel free to open a ticket or find me on discord @Necro#6714. I can usually be found on quite a few BFME/SAGE servers.
 
-![Demo of the GUI](demo_light.png)
-![Demo of the GUI](demo_dark.png)
+![Demo of the GUI](resources/demo_light.png)
+![Demo of the GUI](resources/demo_dark.png)
 
 
 ## How to download
@@ -42,3 +42,8 @@ There is also a public download that's semi-regularly updated in case you don't 
 * Reduce lag from previewing large files (partially solved by preview setting)
 * W3D preview
 * Map preview
+
+## Demo
+Search entire archive for text
+![Search text in archive](resources/search_archive_demo.gif)
+
