@@ -1,10 +1,11 @@
 import fnmatch
 import os
+import re
 import sys
 import logging
 
 from pyBIG import Archive
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut, QIcon, QAction
 from PyQt6.QtWidgets import (
     QMenu,
@@ -28,7 +29,7 @@ import qdarktheme
 from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
@@ -47,6 +48,32 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 sys.excepthook = handle_exception
 
+class ArchiveSearchThread(QThread):
+    matched = pyqtSignal(list)
+
+    def __init__(self, parent, search, encoding, archive) -> None:
+        super().__init__(parent)
+
+        self.search = search
+        self.encoding = encoding
+        self.archive = archive
+
+    def run(self):
+        matches = []
+        self.archive.repack()
+
+        self.archive.archive.seek(0)
+        buffer = self.archive.archive.read().decode(self.encoding)
+        indexes = {match.start() for match in re.finditer(self.search, buffer)}
+        
+        for name, entry in self.archive.entries.items():
+            matched_indexes = {index for index in indexes if entry.position <= index <= (entry.position + entry.size)}
+            if matched_indexes:
+                indexes -= matched_indexes
+                matches.append(name)
+                continue
+
+        self.matched.emit(matches)
 
 class FileList(QListWidget):
     def __init__(self, parent):
@@ -167,7 +194,7 @@ class MainWindow(QMainWindow):
 
         self.settings = QSettings("Necro inc.", "FinalBIGv2")
 
-        if str_to_bool(self.settings.value("settings/dark_mode", "1")):
+        if self.dark_mode:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
         else:
             qdarktheme.setup_theme("light", corner_shape="sharp")
@@ -303,8 +330,10 @@ class MainWindow(QMainWindow):
         edit_menu.addAction("Extract filtered", self.extract_filtered)
 
         tools_menu = menu.addMenu("&Tools")
-        tools_menu.addAction("Dump file list", self.dump_list)
+        tools_menu.addAction("Dump entire file list", lambda: self.dump_list(False))
+        tools_menu.addAction("Dump filtered file list", lambda: self.dump_list(True))
         tools_menu.addAction("Copy file name", self.copy_name)
+        tools_menu.addAction("Find text in archive", self.search_archive)
 
         option_menu = menu.addMenu("&Help")
         option_menu.addAction("About", self.show_about)
@@ -313,7 +342,7 @@ class MainWindow(QMainWindow):
         option_menu.addSeparator()
 
         self.dark_mode_action = QAction("Dark Mode?", self, checkable=True)
-        self.dark_mode_action.setChecked(str_to_bool(self.settings.value("settings/dark_mode", "1")))
+        self.dark_mode_action.setChecked(self.dark_mode)
         option_menu.addAction(self.dark_mode_action)
         option_menu.triggered.connect(self.toggle_dark_mode)
 
@@ -323,6 +352,24 @@ class MainWindow(QMainWindow):
         option_menu.triggered.connect(self.toggle_preview)
 
         option_menu.addAction("Set encoding", self.set_encoding)
+
+    @property
+    def dark_mode(self):
+        return str_to_bool(self.settings.value("settings/dark_mode", "1"))
+
+    @dark_mode.setter
+    def dark_mode_setter(self, value):
+        self.settings.setValue("settings/dark_mode", int(value))
+        self.settings.sync()
+
+    @property
+    def encoding(self):
+        return self.settings.value("settings/encoding", "latin_1")
+
+    @encoding.setter
+    def encoding_setter(self, value):
+        self.settings.setValue("settings/encoding", value)
+        self.settings.sync()
 
     def is_file_selected(self):
         if not self.listwidget.selectedItems():
@@ -385,13 +432,11 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))
 
     def set_encoding(self):
-        setting = self.settings.value("settings/encoding", "latin_1")
-        name, ok = QInputDialog.getItem(self, "Encoding", "Select an encoding", ENCODING_LIST, ENCODING_LIST.index(setting), False)
+        name, ok = QInputDialog.getItem(self, "Encoding", "Select an encoding", ENCODING_LIST, ENCODING_LIST.index(self.encoding), False)
         if not ok:
             return
 
-        self.settings.setValue("settings/encoding", name)
-        self.settings.sync()
+        self.encoding = name
 
     def toggle_preview(self):
         self.settings.setValue("settings/preview", int(self.preview_action.isChecked()))
@@ -400,8 +445,7 @@ class MainWindow(QMainWindow):
     def toggle_dark_mode(self):
         is_checked = self.dark_mode_action.isChecked()
         
-        self.settings.setValue("settings/dark_mode", int(is_checked))
-        self.settings.sync()
+        self.dark_mode = is_checked
         
         if is_checked:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
@@ -413,15 +457,44 @@ class MainWindow(QMainWindow):
             if hasattr(widget, "text_widget"):
                 widget.text_widget.toggle_dark_mode(is_checked)
 
-    def dump_list(self):
+    def dump_list(self, filtered):
         file = QFileDialog.getSaveFileName(self, "Save dump")[0]
         if not file:
             return
 
+        if filtered:
+            file_list = (self.listwidget.item(x).text() for x in range(self.listwidget.count()) if not self.listwidget.item(x).isHidden())
+        else:
+            file_list = self.archive.file_list()
+
         with open(file, "w") as f:
-            f.write("\n".join(name for name in self.archive.file_list()))
+            f.write("\n".join(file_list))
 
         QMessageBox.information(self, "Dump Generated", "File list dump has been created")
+
+    def search_archive(self):
+        search, ok = QInputDialog.getText(
+            self, "Filename", f"Search keyword (Regex)"   
+        )
+        if not ok:
+            return
+
+        def update_list_with_matches(matches):
+            for x in range(self.listwidget.count()):
+                item = self.listwidget.item(x)
+                item.setHidden(item.text() not in matches)
+
+            self.message_box.done(1)
+            QMessageBox.information(self, "Search finishes", "List of files has been filtered with matches")
+
+
+        self.message_box = QMessageBox(QMessageBox.Icon.Information, "Search in progress", "Searching the archive, please wait...", QMessageBox.StandardButton.Ok, self)
+        self.message_box.button(QMessageBox.StandardButton.Ok).setEnabled(False)
+
+        self.thread = ArchiveSearchThread(self, search, self.encoding, self.archive)
+        self.thread.matched.connect(update_list_with_matches)
+        self.thread.start()
+        self.message_box.exec()
 
     def new(self):
         if not self.close_unsaved():

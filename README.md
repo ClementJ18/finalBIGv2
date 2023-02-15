@@ -10,7 +10,8 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Open source
 * Syntax Highlighting
 * Filtering by filename
-* Text search in file (including with Regex)
+* Text search in individual files (including with Regex)
+* Text search the entire BIG file
 * Adapts to dark mode
 * Linux support
 * Select multiple files at once from the list with shift, ctrl or just by dragging
