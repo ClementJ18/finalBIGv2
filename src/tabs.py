@@ -80,6 +80,7 @@ class TextTab(GenericTab):
 
         if self.file_type in (".inc", ".ini"):
             highlighting = QCheckBox("Highlighting")
+            highlighting.setToolTip("Enable/disable syntax highlighting")
             highlighting.setChecked(True)
             search_layout.addWidget(highlighting)
             highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
@@ -94,12 +95,15 @@ class TextTab(GenericTab):
         search_layout.addWidget(self.search_button)
 
         self.regex_box = QCheckBox("Regex")
+        self.regex_box.setToolTip("Intepret search text as a regex pattern?")
         search_layout.addWidget(self.regex_box)
 
         self.case_box = QCheckBox("Case sensitive")
+        self.case_box.setToolTip("Match case of search?")
         search_layout.addWidget(self.case_box)
 
         self.whole_box = QCheckBox("Whole Word")
+        self.whole_box.setToolTip("Match only whole words?")
         search_layout.addWidget(self.whole_box)
 
         self.setLayout(layout)

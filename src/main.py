@@ -24,13 +24,14 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QCheckBox,
 )
 import qdarktheme
 
 from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
-__version__ = "0.3.3"
+__version__ = "0.4.0"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
@@ -60,8 +61,6 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         if ret == 0:
             app.clipboard().setText(tb)
 
-    # sys.__excepthook__(exc_type, exc_value, exc_traceback)
-
 
 sys.excepthook = handle_exception
 
@@ -69,7 +68,7 @@ sys.excepthook = handle_exception
 class ArchiveSearchThread(QThread):
     matched = pyqtSignal(tuple)
 
-    def __init__(self, parent, search, encoding, archive, regex) -> None:
+    def __init__(self, parent, search, encoding, archive : Archive, regex) -> None:
         super().__init__(parent)
 
         self.search = search
@@ -239,6 +238,10 @@ class MainWindow(QMainWindow):
         self.search_button.setText("Filter file list")
         self.search_button.clicked.connect(self.filter_list)
         search_layout.addWidget(self.search_button, stretch=1)
+
+        self.invert_box = QCheckBox("Invert?", self)
+        self.invert_box.setToolTip("Filter based on names that do <b>NOT</b> match?")
+        search_layout.addWidget(self.invert_box)
 
         self.tabs = TabWidget(self)
         self.tabs.setElideMode(Qt.TextElideMode.ElideLeft)
@@ -505,7 +508,7 @@ class MainWindow(QMainWindow):
 
     def search_archive(self, regex):
         search, ok = QInputDialog.getText(
-            self, "Search archive", f"Search keyword {'(Regex)' if regex else ''}",   
+            self, "Search archive", f"This will search through the currently filtered list. Search keyword{' (Regex)' if regex else ''}:",   
         )
         if not ok:
             return
@@ -514,7 +517,9 @@ class MainWindow(QMainWindow):
             matches = returned[0]
             for x in range(self.listwidget.count()):
                 item = self.listwidget.item(x)
-                item.setHidden(item.text() not in matches)
+
+                if not item.isHidden():
+                    item.setHidden(item.text() not in matches)
 
             self.message_box.done(1)
             QMessageBox.information(self, "Search finished", f"Found <b>{returned[1]}</b> instances over <b>{len(matches)}</b> files. Filtering list.")
@@ -588,13 +593,19 @@ class MainWindow(QMainWindow):
 
     def filter_list(self):
         search = self.search.currentText()
+        invert = self.invert_box.isChecked()
+
         for x in range(self.listwidget.count()):
             item = self.listwidget.item(x)
 
             if search == "":
                 item.setHidden(False)
             else:
-                item.setHidden(not fnmatch.fnmatchcase(item.text(), search))
+                hide = not fnmatch.fnmatchcase(item.text(), search)
+                if invert:
+                    hide = not hide
+
+                item.setHidden(hide)
 
         if search == "":
             return
