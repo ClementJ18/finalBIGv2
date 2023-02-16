@@ -45,5 +45,6 @@ There is also a public download that's semi-regularly updated in case you don't 
 
 ## Demo
 Search entire archive for text
+
 ![Search text in archive](resources/search_archive_demo.gif)
 
