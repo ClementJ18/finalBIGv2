@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import logging
+import traceback
 
 from pyBIG import Archive
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
@@ -29,7 +30,7 @@ import qdarktheme
 from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
@@ -43,10 +44,27 @@ logger.addHandler(ch_file)
 
 def handle_exception(exc_type, exc_value, exc_traceback):
     logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
-    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+    if QApplication.instance() is not None:
+        tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        errorbox = QMessageBox(
+            QMessageBox.Icon.Critical, 
+            "Uncaught Exception", 
+            f"Oops. An unexpected error occured. Please copy and submit to <a href='https://github.com/ClementJ18/finalBIGv2/issues'>here</a> if possible.\n<pre>{tb}</pre>",
+        )
+        errorbox.addButton(QPushButton('Copy to clipboard'), QMessageBox.ButtonRole.ActionRole)
+        errorbox.addButton(QPushButton('Ok'), QMessageBox.ButtonRole.AcceptRole)
+        errorbox.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        ret = errorbox.exec()
+
+        if ret == 0:
+            app.clipboard().setText(tb)
+
+    # sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
 
 sys.excepthook = handle_exception
+
 
 class ArchiveSearchThread(QThread):
     matched = pyqtSignal(tuple)
@@ -347,6 +365,7 @@ class MainWindow(QMainWindow):
         option_menu = menu.addMenu("&Help")
         option_menu.addAction("About", self.show_about)
         option_menu.addAction("Help", self.show_help)
+        # option_menu.addAction("Error", self.error)
 
         option_menu.addSeparator()
 
@@ -367,7 +386,7 @@ class MainWindow(QMainWindow):
         return str_to_bool(self.settings.value("settings/dark_mode", "1"))
 
     @dark_mode.setter
-    def dark_mode_setter(self, value):
+    def dark_mode(self, value):
         self.settings.setValue("settings/dark_mode", int(value))
         self.settings.sync()
 
@@ -376,7 +395,7 @@ class MainWindow(QMainWindow):
         return self.settings.value("settings/encoding", "latin_1")
 
     @encoding.setter
-    def encoding_setter(self, value):
+    def encoding(self, value):
         self.settings.setValue("settings/encoding", value)
         self.settings.sync()
 
@@ -439,6 +458,9 @@ class MainWindow(QMainWindow):
 
     def show_about(self):
         QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))
+
+    def error(self):
+        raise ValueError("INTENDED TEST ERROR")
 
     def set_encoding(self):
         name, ok = QInputDialog.getItem(self, "Encoding", "Select an encoding", ENCODING_LIST, ENCODING_LIST.index(self.encoding), False)
