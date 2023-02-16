@@ -31,7 +31,7 @@ import qdarktheme
 from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
@@ -242,6 +242,10 @@ class MainWindow(QMainWindow):
         self.invert_box = QCheckBox("Invert?", self)
         self.invert_box.setToolTip("Filter based on names that do <b>NOT</b> match?")
         search_layout.addWidget(self.invert_box)
+
+        self.re_filter_box = QCheckBox("Re-filter?", self)
+        self.re_filter_box.setToolTip("Apply the new filter on the current list rather than clearing previous filters")
+        search_layout.addWidget(self.re_filter_box)
 
         self.tabs = TabWidget(self)
         self.tabs.setElideMode(Qt.TextElideMode.ElideLeft)
@@ -594,9 +598,12 @@ class MainWindow(QMainWindow):
     def filter_list(self):
         search = self.search.currentText()
         invert = self.invert_box.isChecked()
+        re_filter = self.re_filter_box.isChecked()
 
         for x in range(self.listwidget.count()):
             item = self.listwidget.item(x)
+            if item.isHidden() and re_filter:
+                continue
 
             if search == "":
                 item.setHidden(False)
