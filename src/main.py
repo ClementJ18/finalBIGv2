@@ -31,7 +31,7 @@ import qdarktheme
 from tabs import get_tab_from_file_type
 from utils import ABOUT_STRING, ENCODING_LIST, HELP_STRING, SEARCH_HISTORY_MAX, is_preview, is_unsaved, normalize_name, preview_name, str_to_bool
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
@@ -110,9 +110,9 @@ class FileList(QListWidget):
          
         menu = QMenu(self)
         menu.addAction("Delete selection", self.main.delete)
-        menu.addAction("Rename file", self.main.rename)
         menu.addAction("Extract selection", self.main.extract)
-        menu.addAction("Copy name", self.main.copy_name)
+        menu.addAction("Rename file", self.main.rename)
+        menu.addAction("Copy file name", self.main.copy_name)
 
         menu.exec(global_position)
 
@@ -372,7 +372,6 @@ class MainWindow(QMainWindow):
         option_menu = menu.addMenu("&Help")
         option_menu.addAction("About", self.show_about)
         option_menu.addAction("Help", self.show_help)
-        # option_menu.addAction("Error", self.error)
 
         option_menu.addSeparator()
 
@@ -465,9 +464,6 @@ class MainWindow(QMainWindow):
 
     def show_about(self):
         QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))
-
-    def error(self):
-        raise ValueError("INTENDED TEST ERROR")
 
     def set_encoding(self):
         name, ok = QInputDialog.getItem(self, "Encoding", "Select an encoding", ENCODING_LIST, ENCODING_LIST.index(self.encoding), False)
