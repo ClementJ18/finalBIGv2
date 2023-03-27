@@ -211,6 +211,7 @@ class LexerBFME(QsciLexerCustom):
                 else:
                     self.setStyling(token[1], 0)
 
+
 class DefaultLexer(QsciLexerCustom):
     def __init__(self, parent, dark_mode) -> None:
         super().__init__(parent)

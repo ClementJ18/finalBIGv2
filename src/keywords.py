@@ -3388,5 +3388,5 @@ CODEBLOCKS = [
     "musictrack",
     "replacemodule",
     "addmodule",
-    "removemodule"
+    "removemodule",
 ]

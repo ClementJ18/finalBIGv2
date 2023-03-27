@@ -32,8 +32,9 @@ from cah import CustomHero
 from editor import Editor
 from utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
 
+
 class GenericTab(QWidget):
-    def __init__(self, main : QMainWindow, archive : Archive, name):
+    def __init__(self, main: QMainWindow, archive: Archive, name):
         super().__init__()
 
         self.archive = archive
@@ -42,6 +43,9 @@ class GenericTab(QWidget):
         self.name = name
         self.file_type = os.path.splitext(name)[1]
         self.data = self.archive.read_file(name)
+
+        self.external = False
+        self.path = None
 
     def generate_layout(self):
         layout = QHBoxLayout()
@@ -59,6 +63,36 @@ class GenericTab(QWidget):
 
     def save(self):
         pass
+
+    def gather_files(self) -> list:
+        return [self.name]
+
+    def open_externally(self):
+        layout = QHBoxLayout()
+
+        data = QTextEdit(self)
+        data.setReadOnly(True)
+        data.setText("File opened externally")
+
+        layout.addWidget(data)
+        self.setLayout(layout)
+
+        self.tmp = tempfile.TemporaryDirectory(prefix=f"{self.file_type[:1]}-")
+
+        for file in self.gather_files():
+            if self.archive.file_exists(file):
+                with open(os.path.join(self.tmp.name, os.path.basename(file)), "wb") as f:
+                    f.write(self.archive.read_file(file))
+
+        self.path = os.path.join(self.tmp.name, os.path.basename(self.name))
+        webbrowser.open(self.path)
+
+        self.observer = Observer()
+        self.observer.schedule(SaveEventHandler(self, self.name, self.path), self.tmp.name)
+
+        self.observer.start()
+        self.external = True
+
 
 class TextTab(GenericTab):
     def generate_layout(self):
@@ -134,7 +168,13 @@ class TextTab(GenericTab):
         self.search.setFocus()
 
     def save(self):
-        string = encode_string(self.text_widget.text(), self.main.encoding)
+        if self.external:
+            with open(self.path, "r", encoding=self.main.encoding) as f:
+                data = f.read()
+        else:
+            data = self.text_widget.text()
+
+        string = encode_string(data, self.main.encoding)
         self.archive.edit_file(self.name, string)
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
 
@@ -169,6 +209,7 @@ class ImageTab(GenericTab):
 
         self.setLayout(self.layout)
 
+
 class CustomHeroTab(GenericTab):
     def generate_layout(self):
         layout = QHBoxLayout()
@@ -176,10 +217,7 @@ class CustomHeroTab(GenericTab):
         try:
             cah = CustomHero(self.data, self.main.encoding)
 
-            powers = "\n".join(
-                f"\t- Level {level+1}: {power} (index: {index})"
-                for power, level, index in cah.powers
-            )
+            powers = "\n".join(f"\t- Level {level+1}: {power} (index: {index})" for power, level, index in cah.powers)
             blings = "\n".join(f"\t- {bling}: {index}" for bling, index in cah.blings)
             text = f"""
                Name: {cah.name}
@@ -188,7 +226,7 @@ class CustomHeroTab(GenericTab):
                Power: \n{powers}\n
                Blings: \n{blings}\n
             """
-        except Exception as e:
+        except Exception:
             text = traceback.format_exc()
 
         data = QTextEdit(self)
@@ -197,6 +235,7 @@ class CustomHeroTab(GenericTab):
 
         layout.addWidget(data)
         self.setLayout(layout)
+
 
 class SoundTab(GenericTab):
     def generate_layout(self):
@@ -228,6 +267,7 @@ class SoundTab(GenericTab):
         t = threading.Thread(target=play, args=(self.song,))
         t.start()
 
+
 class SaveEventHandler(FileSystemEventHandler):
     def __init__(self, tab, name, tmp_name):
         super().__init__()
@@ -241,11 +281,9 @@ class SaveEventHandler(FileSystemEventHandler):
             self.tab.save()
 
     def on_closed(self, event):
-        print("CLOSED")
-        print(event)
         if event.src_path == self.tmp_name:
             self.tab.delete()
-    
+
 
 class MapTab(GenericTab):
     def __init__(self, main: QMainWindow, archive: Archive, name):
@@ -255,7 +293,7 @@ class MapTab(GenericTab):
         self.map_path = None
         self.tmp = None
 
-    def  gather_map_folder(self):
+    def gather_files(self):
         folder = os.path.dirname(self.name)
         file_name = os.path.splitext(self.name)[0]
 
@@ -271,36 +309,10 @@ class MapTab(GenericTab):
         return to_extract
 
     def generate_layout(self, preview=False):
-        layout = QHBoxLayout()
-
-        data = QTextEdit(self)
-        data.setReadOnly(True)
-        data.setText(f"Preview mode for {self.file_type} not supported, double click to edit.\n\n This will use the worldbuilder from your current game installation.")
-
-        layout.addWidget(data)
-
-        self.setLayout(layout)
-
-        if preview:
-            return
-
-        self.tmp = tempfile.TemporaryDirectory(prefix="map-")
-
-        for file in self.gather_map_folder():
-            if self.archive.file_exists(file):
-                with open(os.path.join(self.tmp.name, os.path.basename(file)), "wb") as f:
-                    f.write(self.archive.read_file(file))
-
-        self.map_path = os.path.join(self.tmp.name, os.path.basename(self.name))
-        webbrowser.open(self.map_path)
-
-        self.observer = Observer()
-        self.observer.schedule(SaveEventHandler(self, self.name, self.map_path), self.tmp.name)
-
-        self.observer.start()
+        self.open_externally()
 
     def save(self):
-        with open(self.map_path, "rb") as f:
+        with open(self.path, "rb") as f:
             data = f.read()
             self.archive.edit_file(self.name, data)
             self.data = data
@@ -317,22 +329,32 @@ class MapTab(GenericTab):
         return super().deleteLater()
 
     def generate_preview(self):
-        self.generate_layout(preview=True)
-        
+        layout = QHBoxLayout()
+
+        data = QTextEdit(self)
+        data.setReadOnly(True)
+        data.setText(
+            f"Preview mode for {self.file_type} not supported, double click to edit.\n\n This will use the worldbuilder from your current game installation."
+        )
+
+        layout.addWidget(data)
+        self.setLayout(layout)
+
 
 TAB_TYPES = {
     (".lua", ".inc", ".ini", ".str", ".xml"): TextTab,
     (".bse", ".map"): MapTab,
     (".wav",): SoundTab,
     (".cah",): CustomHeroTab,
-    tuple(Image.registered_extensions().keys()): ImageTab
+    tuple(Image.registered_extensions().keys()): ImageTab,
 }
 
-def get_tab_from_file_type(name : str) -> GenericTab:
+
+def get_tab_from_file_type(name: str) -> GenericTab:
     file_type = os.path.splitext(name)[1]
 
     for key, value in TAB_TYPES.items():
         if file_type in key:
             return value
-        
+
     return GenericTab

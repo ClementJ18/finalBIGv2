@@ -1,5 +1,6 @@
 import io
 
+
 # Credits to withmorten
 class CustomHero:
     def __init__(self, b, encoding):
