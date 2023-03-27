@@ -41,7 +41,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 basedir = os.path.dirname(__file__)
 logger = logging.getLogger("FinalBIGv2")
