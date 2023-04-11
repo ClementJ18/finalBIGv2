@@ -128,3 +128,5 @@ tools/__edain_data.big
 
 clean_up.py
 /ffmpeg
+/main.*
+min_example.py

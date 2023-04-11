@@ -19,6 +19,7 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Right click menu for ease of access in the file list
 * User settings for persistent customisation
 * Open files in your default applications or use the internal editor
+* Auto-compile by Github
 * And many more in the future!
 
 At this very early stage I am mostly looking for feedback so if you have any thoughts feel free to open a ticket or find me on discord @Necro#6714. I can usually be found on quite a few BFME/SAGE servers.
@@ -27,22 +28,24 @@ At this very early stage I am mostly looking for feedback so if you have any tho
 ![Demo of the GUI](resources/demo_dark.png)
 
 
-## How to download
+## How to use
 A new build is compiled directly from the source everytime a commit is pushed to the repository, you can download it from the [build menu](https://github.com/ClementJ18/finalBIGv2/actions/workflows/main.yml?query=branch%3Amain).
 
 There is also a public download that's semi-regularly updated in case you don't have a GitHub account: https://www.moddb.com/downloads/finalbigv2
 
+### Running the repository
+Don't trust the exe or it doesn't work? No problem
+1. Download and install python: https://www.python.org/downloads/release/python-31011/
+2. Download the repository as a zip and extract it to a folder
+3. Open a terminal and navigate to the folder with `cd PATH` where PATH is the path of the folder
+3. Install the dependencies with `python -m pip install -r requirements.txt`
+4. Run the application with `python src/main.py`
+
 ## Current Limitations
 * Syntax Highlighting gets kinda weird with non-ASCII characters, you can reset it by turning it off and on
 * Audio files are currently not supported until I find a way to bundle ffmpeg
-* Auto-compile for Linux does not work
 * The LUA and XML editor don't switch to dark mode
 * Line number color of currently open editors does not adapt properly when switching dark/light mode (fix by re-opening tabs)
-
-## To-do
-* Reduce lag from previewing large files (partially solved by preview setting)
-* W3D preview
-* Map preview
 
 ## Demo
 Search entire archive for text
