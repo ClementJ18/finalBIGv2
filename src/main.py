@@ -41,35 +41,25 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.7.0"
+__version__ = "0.9.0"
 
 basedir = os.path.dirname(__file__)
-logger = logging.getLogger("FinalBIGv2")
-logger.setLevel(logging.ERROR)
-
-ch_file = logging.FileHandler("error.log", mode="a+", delay=True)
-ch_file.setLevel(logging.ERROR)
-
-logger.addHandler(ch_file)
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
-    logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+    tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    errorbox = QMessageBox(
+        QMessageBox.Icon.Critical,
+        "Uncaught Exception",
+        f"Oops. An unexpected error occured. Please copy and submit to <a href='https://github.com/ClementJ18/finalBIGv2/issues'>here</a> if possible.\n<pre>{tb}</pre>",
+    )
+    errorbox.addButton(QPushButton("Copy to clipboard"), QMessageBox.ButtonRole.ActionRole)
+    errorbox.addButton(QPushButton("Ok"), QMessageBox.ButtonRole.AcceptRole)
+    errorbox.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    ret = errorbox.exec()
 
-    if QApplication.instance() is not None:
-        tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-        errorbox = QMessageBox(
-            QMessageBox.Icon.Critical,
-            "Uncaught Exception",
-            f"Oops. An unexpected error occured. Please copy and submit to <a href='https://github.com/ClementJ18/finalBIGv2/issues'>here</a> if possible.\n<pre>{tb}</pre>",
-        )
-        errorbox.addButton(QPushButton("Copy to clipboard"), QMessageBox.ButtonRole.ActionRole)
-        errorbox.addButton(QPushButton("Ok"), QMessageBox.ButtonRole.AcceptRole)
-        errorbox.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        ret = errorbox.exec()
-
-        if ret == 0:
-            app.clipboard().setText(tb)
+    if ret == 0:
+        app.clipboard().setText(tb)
 
 
 sys.excepthook = handle_exception
@@ -444,19 +434,25 @@ class MainWindow(QMainWindow):
             if is_unsaved(self.tabs.tabText(index)):
                 self.tabs.widget(index).save()
 
-        self.archive.save(path)
-        QMessageBox.information(self, "Done", "Archive has been saved")
+        try:
+            self.archive.save(path)
+            QMessageBox.information(self, "Done", "Archive has been saved")
+        except PermissionError:
+            QMessageBox.critical(self, "Failed", "Could not save due to missing permissions. Save somewhere this application has access and restart the application as admin.")
+
         self.path = path
         self.update_archive_name()
 
     def _open(self, path):
         try:
-            self.path = path
-            with open(self.path, "rb") as f:
-                self.archive = Archive(f.read())
+            with open(path, "rb") as f:
+                archive = Archive(f.read())
         except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
+            QMessageBox.critical(self, "Error", str(e))
+            return
 
+        self.archive = archive
+        self.path = path
         self.update_archive_name()
         self.listwidget.update_list()
 
