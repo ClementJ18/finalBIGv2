@@ -42,7 +42,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 basedir = os.path.dirname(__file__)
 
@@ -254,6 +254,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.base_name = "FinalBIG v2"
         self.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
+        self.search_archive_regex_bool = False
 
         self.settings = QSettings("Necro inc.", "FinalBIGv2")
 
@@ -367,7 +368,20 @@ class MainWindow(QMainWindow):
                 QShortcut(QKeySequence("CTRL+H"), self, self.show_help),
                 "Show the help",
             ),
+            (
+                QShortcut(
+                    QKeySequence("CTRL+SHIFT+F"), self, lambda: self.search_archive(self.search_archive_regex_bool)
+                ),
+                "Search for text in the archive",
+            ),
+            (
+                QShortcut(QKeySequence("ALT+R"), self, self.toggle_search_archive_regex),
+                "Toggle the 'Search for text in archive' shortcut regex search on/off",
+            ),
         ]
+
+    def toggle_search_archive_regex(self):
+        self.search_archive_regex_bool = not self.search_archive_regex_bool
 
     def create_menu(self):
         menu = self.menuBar()
@@ -416,7 +430,9 @@ class MainWindow(QMainWindow):
         option_menu.triggered.connect(self.toggle_dark_mode)
 
         self.use_external_action = QAction("Use external programs?", self, checkable=True)
-        self.use_external_action.setToolTip("Whether to open using the internal editor or the user's default application")
+        self.use_external_action.setToolTip(
+            "Whether to open using the internal editor or the user's default application"
+        )
         self.use_external_action.setChecked(self.external)
         option_menu.addAction(self.use_external_action)
         option_menu.triggered.connect(self.toggle_external)
@@ -484,7 +500,11 @@ class MainWindow(QMainWindow):
             self.archive.save(path)
             QMessageBox.information(self, "Done", "Archive has been saved")
         except PermissionError:
-            QMessageBox.critical(self, "Failed", "Could not save due to missing permissions. Save somewhere this application has access and restart the application as admin.")
+            QMessageBox.critical(
+                self,
+                "Failed",
+                "Could not save due to missing permissions. Save somewhere this application has access and restart the application as admin.",
+            )
 
         self.path = path
         self.update_archive_name()
@@ -530,9 +550,7 @@ class MainWindow(QMainWindow):
         if self.listwidget.currentIndex() != self.listwidget.count() - 1:
             return
 
-        name, ok = QInputDialog.getText(
-            self, "Tab name", "Pick a name for your new tab:"
-        )
+        name, ok = QInputDialog.getText(self, "Tab name", "Pick a name for your new tab:")
         if not ok:
             return False
 
