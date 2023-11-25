@@ -4,6 +4,7 @@ import re
 import sys
 import logging
 import traceback
+from typing import List
 
 from pyBIG import Archive
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
@@ -140,7 +141,6 @@ class FileList(QListWidget):
                 else:
                     self.add_folder(url.toLocalFile())
 
-            self.update_list()
             event.acceptProposedAction()
 
     def _add_file(self, url, name, blank=False, skip_all=False):
@@ -181,18 +181,25 @@ class FileList(QListWidget):
             return False
 
         self._add_file(url, name, blank)
+        self.main.listwidget.add_files([name])
 
     def add_folder(self, url):
         skip_all = False
         common_dir = os.path.dirname(url)
+        files = []
         for root, _, files in os.walk(url):
             for f in files:
                 full_path = os.path.join(root, f)
                 name = normalize_name(os.path.relpath(full_path, common_dir))
                 ret = self._add_file(full_path, name, blank=False, skip_all=skip_all)
 
+                if ret != QMessageBox.StandardButton.No:
+                    files.append(name)
+
                 if ret == QMessageBox.StandardButton.YesToAll:
                     skip_all = True
+
+        self.main.listwidget.add_files(files)
 
     def update_list(self):
         self.clear()
@@ -211,6 +218,37 @@ class TabWidget(QTabWidget):
         self.removeTab(index)
 
 
+class FileListTabs(TabWidget):
+    @property
+    def active_list(self) -> FileList:
+        return self.currentWidget()
+
+    @property
+    def all_lists(self) -> List[FileList]:
+        return [self.widget(i) for i in range(self.count() - 1)]
+
+    @property
+    def all_but_active(self) -> List[FileList]:
+        return [self.widget(i) for i in range(self.count() - 1) if i != self.currentIndex()]
+
+    def update_list(self, all=False):
+        to_update = self.all_lists if all else [self.active_list]
+        for widget in to_update:
+            widget.update_list()
+
+    def add_files(self, files):
+        for widget in self.all_lists:
+            for file in files:
+                widget.insertItem(widget.count(), file)
+
+    def remove_files(self, files):
+        expressions = f"({'|'.join([f[0] for f in files])})".replace("\\", "\\\\")
+        for widget in self.all_lists:
+            items = widget.findItems(expressions, Qt.MatchFlag.MatchRegularExpression)
+            for item in items:
+                widget.takeItem(widget.row(item))
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -226,9 +264,15 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout()
 
-        self.listwidget = FileList(self)
-        self.listwidget.itemSelectionChanged.connect(self.file_single_clicked)
-        self.listwidget.doubleClicked.connect(self.file_double_clicked)
+        self.listwidget = FileListTabs(self)
+
+        self.listwidget.addTab(QTabWidget(self), QIcon(os.path.join(basedir, "new_tab.png")), "")
+        self.listwidget.currentChanged.connect(self.open_new_tab)
+        self.listwidget.setElideMode(Qt.TextElideMode.ElideLeft)
+        self.listwidget.setTabsClosable(True)
+        self.listwidget.tabCloseRequested.connect(self._remove_list_tab)
+        self.listwidget.setUsesScrollButtons(True)
+        self.listwidget.tabBar().setTabButton(0, self.listwidget.tabBar().ButtonPosition.RightSide, None)
 
         search_widget = QWidget(self)
         search_layout = QHBoxLayout()
@@ -269,11 +313,6 @@ class MainWindow(QMainWindow):
         self.create_menu()
         self.create_shortcuts()
 
-        widget = QWidget()
-        widget.setLayout(layout)
-        self.setCentralWidget(widget)
-        self.showMaximized()
-
         try:
             path_arg = sys.argv[1]
         except IndexError:
@@ -283,6 +322,13 @@ class MainWindow(QMainWindow):
             self._open(path_arg)
         else:
             self._new()
+
+        self.add_file_list()
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+        self.showMaximized()
 
     def create_shortcuts(self):
         self.shorcuts = [
@@ -411,7 +457,7 @@ class MainWindow(QMainWindow):
         self.settings.sync()
 
     def is_file_selected(self):
-        if not self.listwidget.selectedItems():
+        if not self.listwidget.active_list.selectedItems():
             QMessageBox.warning(self, "No file selected", "You have not selected a file")
             return False
 
@@ -454,16 +500,43 @@ class MainWindow(QMainWindow):
         self.archive = archive
         self.path = path
         self.update_archive_name()
-        self.listwidget.update_list()
+        self.listwidget.update_list(True)
 
     def _new(self):
         self.archive = Archive()
         self.path = None
-        self.listwidget.update_list()
+        self.listwidget.update_list(True)
         self.update_archive_name()
 
-    def _remove_tab(self, index):
+    def _remove_file_tab(self, index):
         self.tabs.remove_tab(index)
+
+    def _remove_list_tab(self, index):
+        if self.listwidget.currentIndex() == self.listwidget.count() - 2:
+            self.listwidget.setCurrentIndex(self.listwidget.count() - 3)
+
+        self.listwidget.remove_tab(index)
+
+    def add_file_list(self, name="List"):
+        widget = FileList(self)
+        widget.itemSelectionChanged.connect(self.file_single_clicked)
+        widget.doubleClicked.connect(self.file_double_clicked)
+        widget.update_list()
+
+        self.listwidget.insertTab(self.listwidget.count() - 1, widget, name)
+        self.listwidget.setCurrentIndex(self.listwidget.count() - 2)
+
+    def open_new_tab(self):
+        if self.listwidget.currentIndex() != self.listwidget.count() - 1:
+            return
+
+        name, ok = QInputDialog.getText(
+            self, "Tab name", "Pick a name for your new tab:"
+        )
+        if not ok:
+            return False
+
+        self.add_file_list(name)
 
     def show_help(self):
         string = HELP_STRING.format(
@@ -515,9 +588,9 @@ class MainWindow(QMainWindow):
 
         if filtered:
             file_list = (
-                self.listwidget.item(x).text()
-                for x in range(self.listwidget.count())
-                if not self.listwidget.item(x).isHidden()
+                self.listwidget.active_list.item(x).text()
+                for x in range(self.listwidget.active_list.count())
+                if not self.listwidget.active_list.item(x).isHidden()
             )
         else:
             file_list = self.archive.file_list()
@@ -538,8 +611,8 @@ class MainWindow(QMainWindow):
 
         def update_list_with_matches(returned):
             matches = returned[0]
-            for x in range(self.listwidget.count()):
-                item = self.listwidget.item(x)
+            for x in range(self.listwidget.active_list.count()):
+                item = self.listwidget.active_list.item(x)
 
                 if not item.isHidden():
                     item.setHidden(item.text() not in matches)
@@ -608,28 +681,25 @@ class MainWindow(QMainWindow):
         if not file:
             return
 
-        self.listwidget.add_file(file)
-        self.listwidget.update_list()
+        self.listwidget.active_list.add_file(file)
 
     def add_directory(self):
         path = QFileDialog.getExistingDirectory(self, "Add directory")
         if not path:
             return
 
-        self.listwidget.add_folder(path)
-        self.listwidget.update_list()
+        self.listwidget.active_list.add_folder(path)
 
     def new_file(self):
-        self.listwidget.add_file(None, blank=True)
-        self.listwidget.update_list()
+        self.listwidget.active_list.add_file(None, blank=True)
 
     def filter_list(self):
         search = self.search.currentText()
         invert = self.invert_box.isChecked()
         re_filter = self.re_filter_box.isChecked()
 
-        for x in range(self.listwidget.count()):
-            item = self.listwidget.item(x)
+        for x in range(self.listwidget.active_list.count()):
+            item = self.listwidget.active_list.item(x)
             if item.isHidden() and re_filter:
                 continue
 
@@ -657,7 +727,7 @@ class MainWindow(QMainWindow):
 
         deleted = []
         skip_all = False
-        for item in self.listwidget.selectedItems():
+        for item in self.listwidget.active_list.selectedItems():
             name = item.text()
             if not skip_all:
                 ret = QMessageBox.question(
@@ -686,7 +756,7 @@ class MainWindow(QMainWindow):
             if (name in t for t in deleted):
                 self.tabs.remove_tab(i)
 
-        self.listwidget.update_list()
+        self.listwidget.remove_files(deleted)
         QMessageBox.information(self, "Done", "File selection has been deleted")
 
     def clear_preview(self):
@@ -695,20 +765,20 @@ class MainWindow(QMainWindow):
 
         name = self.tabs.tabText(0)
         if is_preview(name):
-            self._remove_tab(0)
+            self._remove_file_tab(0)
 
     def copy_name(self):
         if not self.is_file_selected():
             return
 
-        original_name = self.listwidget.currentItem().text()
+        original_name = self.listwidget.active_list.currentItem().text()
         app.clipboard().setText(original_name)
 
     def rename(self):
         if not self.is_file_selected():
             return
 
-        original_name = self.listwidget.currentItem().text()
+        original_name = self.listwidget.active_list.currentItem().text()
 
         name, ok = QInputDialog.getText(self, "Filename", f"Rename {original_name} as:", text=original_name)
         if not ok:
@@ -722,30 +792,33 @@ class MainWindow(QMainWindow):
         self.archive.add_file(name, self.archive.read_file(original_name))
         self.archive.remove_file(original_name)
 
-        self.listwidget.update_list()
+        self.listwidget.active_list.currentItem().setText(name)
         QMessageBox.information(self, "Done", "File renamed")
 
     def extract(self):
         if not self.is_file_selected():
             return
 
-        items = self.listwidget.selectedItems()
+        items = self.listwidget.active_list.selectedItems()
 
-        extracted_one = False
-        for item in items:
+        if len(items) > 1:
+            path = QFileDialog.getExistingDirectory(self, "Extract filtered files to directory")
+            if not path:
+                return
+
+            self.archive.extract(path, files=[item.text() for item in items])
+        else:
+            item = items[0]
             name = item.text()
             file_name = name.split("\\")[-1]
             path = QFileDialog.getSaveFileName(self, "Extract file", file_name)[0]
             if not path:
-                continue
+                return
 
             with open(path, "wb") as f:
                 f.write(self.archive.read_file(name))
 
-            extracted_one = True
-
-        if extracted_one:
-            QMessageBox.information(self, "Done", "File selection has been extracted")
+        QMessageBox.information(self, "Done", "File selection has been extracted")
 
     def extract_all(self):
         path = QFileDialog.getExistingDirectory(self, "Extract all files to directory")
@@ -761,16 +834,16 @@ class MainWindow(QMainWindow):
             return
 
         files = [
-            self.listwidget.item(x).text()
-            for x in range(self.listwidget.count())
-            if not self.listwidget.item(x).isHidden()
+            self.listwidget.active_list.item(x).text()
+            for x in range(self.listwidget.active_list.count())
+            if not self.listwidget.active_list.item(x).isHidden()
         ]
 
         self.archive.extract(path, files=files)
         QMessageBox.information(self, "Done", "Filtered files have been extracted")
 
     def file_double_clicked(self, _):
-        name = self.listwidget.currentItem().text()
+        name = self.listwidget.active_list.currentItem().text()
 
         for x in range(self.tabs.count()):
             if self.tabs.tabText(x) == name:
@@ -790,13 +863,13 @@ class MainWindow(QMainWindow):
             self.tabs.setCurrentIndex(index)
 
             if self.tabs.tabText(0) == preview_name(name):
-                self._remove_tab(0)
+                self._remove_file_tab(0)
 
     def file_single_clicked(self):
         if not str_to_bool(self.settings.value("settings/preview", "1")):
             return
 
-        name = self.listwidget.currentItem().text()
+        name = self.listwidget.active_list.currentItem().text()
         if not self.archive.file_exists(name):
             return
 
@@ -809,7 +882,7 @@ class MainWindow(QMainWindow):
             tab.generate_preview()
 
             if is_preview(self.tabs.tabText(0)) and self.tabs.currentIndex() >= 0:
-                self._remove_tab(0)
+                self._remove_file_tab(0)
 
             self.tabs.insertTab(0, tab, preview_name(name))
             self.tabs.setTabToolTip(0, preview_name(name))
@@ -834,7 +907,7 @@ class MainWindow(QMainWindow):
             if ret == QMessageBox.StandardButton.No:
                 return
 
-        self._remove_tab(index)
+        self._remove_file_tab(index)
 
     def close_unsaved(self):
         unsaved_tabs = any(is_unsaved(self.tabs.tabText(i)) for i in range(self.tabs.count()))
@@ -850,7 +923,7 @@ class MainWindow(QMainWindow):
                 return False
 
         for t in range(self.tabs.count()):
-            self._remove_tab(t)
+            self._remove_file_tab(t)
 
         return True
 

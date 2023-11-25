@@ -34,6 +34,9 @@ Version: <b>{version}</b>
 
 
 def normalize_name(name: str):
+    if name is None:
+        return ""
+
     return name.replace("/", "\\")
 
 
