@@ -3,7 +3,6 @@ import re
 from PyQt6.QtGui import QColor, QShortcut, QKeySequence
 from PyQt6.Qsci import QsciScintilla, QsciLexerLua, QsciLexerCustom, QsciLexerXML
 
-import darkdetect
 
 from keywords import KEYWORDS, BEHAVIORS, CODEBLOCKS, SINGLETONS
 
@@ -50,7 +49,7 @@ class Commenter:
             start_line = self.sci.SendScintilla(QsciScintilla.SCI_LINEFROMPOSITION, r["begin"])
             end_line = self.sci.SendScintilla(QsciScintilla.SCI_LINEFROMPOSITION, r["end"])
             for cur_line in range(start_line, end_line + 1):
-                if not cur_line in all_lines:
+                if cur_line not in all_lines:
                     all_lines.append(cur_line)
             if r["begin"] <= r["end"]:
                 self.sel_regions.append(r)

@@ -2,7 +2,6 @@ import fnmatch
 import os
 import re
 import sys
-import logging
 import traceback
 from typing import List
 
@@ -84,12 +83,17 @@ class ArchiveSearchThread(QThread):
         self.archive.archive.seek(0)
         buffer = self.archive.archive.read().decode(self.encoding)
         indexes = {
-            match.start() for match in re.finditer(self.search if self.regex else re.escape(self.search), buffer)
+            match.start()
+            for match in re.finditer(self.search if self.regex else re.escape(self.search), buffer)
         }
         match_count = len(indexes)
 
         for name, entry in self.archive.entries.items():
-            matched_indexes = {index for index in indexes if entry.position <= index <= (entry.position + entry.size)}
+            matched_indexes = {
+                index
+                for index in indexes
+                if entry.position <= index <= (entry.position + entry.size)
+            }
             if matched_indexes:
                 indexes -= matched_indexes
                 matches.append(name)
@@ -175,7 +179,10 @@ class FileList(QListWidget):
 
     def add_file(self, url, blank=False):
         name, ok = QInputDialog.getText(
-            self, "Filename", "Save the file under the following name:", text=normalize_name(url)
+            self,
+            "Filename",
+            "Save the file under the following name:",
+            text=normalize_name(url),
         )
         if not ok:
             return False
@@ -254,7 +261,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.base_name = "FinalBIG v2"
         self.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
+
         self.search_archive_regex_bool = False
+        self.tab_current_index = 0
 
         self.settings = QSettings("Necro inc.", "FinalBIGv2")
 
@@ -266,14 +275,16 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
 
         self.listwidget = FileListTabs(self)
-
-        self.listwidget.addTab(QTabWidget(self), QIcon(os.path.join(basedir, "new_tab.png")), "")
-        self.listwidget.currentChanged.connect(self.open_new_tab)
         self.listwidget.setElideMode(Qt.TextElideMode.ElideLeft)
         self.listwidget.setTabsClosable(True)
-        self.listwidget.tabCloseRequested.connect(self._remove_list_tab)
         self.listwidget.setUsesScrollButtons(True)
-        self.listwidget.tabBar().setTabButton(0, self.listwidget.tabBar().ButtonPosition.RightSide, None)
+        self.listwidget.addTab(FileList(self), QIcon(os.path.join(basedir, "new_tab.png")), "")
+        self.listwidget.tabBar().setTabButton(
+            0, self.listwidget.tabBar().ButtonPosition.RightSide, None
+        )
+
+        self.listwidget.currentChanged.connect(self.open_new_tab)
+        self.listwidget.tabCloseRequested.connect(self._remove_list_tab)
 
         search_widget = QWidget(self)
         search_layout = QHBoxLayout()
@@ -294,7 +305,9 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.invert_box)
 
         self.re_filter_box = QCheckBox("Re-filter?", self)
-        self.re_filter_box.setToolTip("Apply the new filter on the current list rather than clearing previous filters")
+        self.re_filter_box.setToolTip(
+            "Apply the new filter on the current list rather than clearing previous filters"
+        )
         search_layout.addWidget(self.re_filter_box)
 
         self.tabs = TabWidget(self)
@@ -345,7 +358,10 @@ class MainWindow(QMainWindow):
                 ),
                 "Create a new archive",
             ),
-            (QShortcut(QKeySequence("CTRL+O"), self, self.open), "Open a different archive"),
+            (
+                QShortcut(QKeySequence("CTRL+O"), self, self.open),
+                "Open a different archive",
+            ),
             (QShortcut(QKeySequence("CTRL+S"), self, self.save), "Save the archive"),
             (
                 QShortcut(QKeySequence("CTRL+SHIFT+S"), self, self.save_editor),
@@ -359,7 +375,10 @@ class MainWindow(QMainWindow):
                 QShortcut(QKeySequence("CTRL+F"), self, self.search_file),
                 "Search the current text editor",
             ),
-            (QShortcut(QKeySequence("CTRL+W"), self, self.close_tab_shortcut), "Close the current tab"),
+            (
+                QShortcut(QKeySequence("CTRL+W"), self, self.close_tab_shortcut),
+                "Close the current tab",
+            ),
             (
                 "CTRL+;",
                 "Comment/uncomment the currently selected text",
@@ -370,7 +389,9 @@ class MainWindow(QMainWindow):
             ),
             (
                 QShortcut(
-                    QKeySequence("CTRL+SHIFT+F"), self, lambda: self.search_archive(self.search_archive_regex_bool)
+                    QKeySequence("CTRL+SHIFT+F"),
+                    self,
+                    lambda: self.search_archive(self.search_archive_regex_bool),
                 ),
                 "Search for text in the archive",
             ),
@@ -548,13 +569,17 @@ class MainWindow(QMainWindow):
 
     def open_new_tab(self):
         if self.listwidget.currentIndex() != self.listwidget.count() - 1:
+            self.tab_current_index = self.listwidget.currentIndex()
             return
 
-        name, ok = QInputDialog.getText(self, "Tab name", "Pick a name for your new tab:")
-        if not ok:
-            return False
+        name = "List"
+        if self.listwidget.count() != 1:
+            name, ok = QInputDialog.getText(self, "Tab name", "Pick a name for your new tab:")
+            if not ok:
+                return self.listwidget.setCurrentIndex(self.tab_current_index)
 
         self.add_file_list(name)
+        self.tab_current_index = self.listwidget.currentIndex()
 
     def show_help(self):
         string = HELP_STRING.format(
@@ -570,7 +595,12 @@ class MainWindow(QMainWindow):
 
     def set_encoding(self):
         name, ok = QInputDialog.getItem(
-            self, "Encoding", "Select an encoding", ENCODING_LIST, ENCODING_LIST.index(self.encoding), False
+            self,
+            "Encoding",
+            "Select an encoding",
+            ENCODING_LIST,
+            ENCODING_LIST.index(self.encoding),
+            False,
         )
         if not ok:
             return
@@ -733,7 +763,11 @@ class MainWindow(QMainWindow):
         if search == "":
             return
 
-        if not any(self.search.itemText(x) for x in range(self.search.count()) if self.search.itemText(x) == search):
+        if not any(
+            self.search.itemText(x)
+            for x in range(self.search.count())
+            if self.search.itemText(x) == search
+        ):
             self.search.addItem(search)
 
         if self.search.count() > SEARCH_HISTORY_MAX:
@@ -798,7 +832,9 @@ class MainWindow(QMainWindow):
 
         original_name = self.listwidget.active_list.currentItem().text()
 
-        name, ok = QInputDialog.getText(self, "Filename", f"Rename {original_name} as:", text=original_name)
+        name, ok = QInputDialog.getText(
+            self, "Filename", f"Rename {original_name} as:", text=original_name
+        )
         if not ok:
             return
 

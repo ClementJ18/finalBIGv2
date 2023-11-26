@@ -217,7 +217,10 @@ class CustomHeroTab(GenericTab):
         try:
             cah = CustomHero(self.data, self.main.encoding)
 
-            powers = "\n".join(f"\t- Level {level+1}: {power} (index: {index})" for power, level, index in cah.powers)
+            powers = "\n".join(
+                f"\t- Level {level+1}: {power} (index: {index})"
+                for power, level, index in cah.powers
+            )
             blings = "\n".join(f"\t- {bling}: {index}" for bling, index in cah.blings)
             text = f"""
                Name: {cah.name}

@@ -8,7 +8,7 @@ a = Analysis(
     ['src/main.py'],
     pathex=[],
     binaries=[],
-    datas=[('./src/icon.ico','.')],
+    datas=[('./src/icon.ico','.'), ('./src/new_tab.png', '.')],
     hiddenimports=["PyQt6.sip", "PyQt6.QtPrintSupport"],
     hookspath=[],
     runtime_hooks=[],
