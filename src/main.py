@@ -41,7 +41,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.10.0"
+__version__ = "0.10.1"
 
 basedir = os.path.dirname(__file__)
 
@@ -187,8 +187,8 @@ class FileList(QListWidget):
         if not ok:
             return False
 
-        self._add_file(url, name, blank)
-        self.main.listwidget.add_files([name])
+        ret = self._add_file(url, name, blank)
+        self.main.listwidget.add_files([name], ret is not None)
 
     def add_folder(self, url):
         skip_all = False
@@ -243,13 +243,16 @@ class FileListTabs(TabWidget):
         for widget in to_update:
             widget.update_list()
 
-    def add_files(self, files):
+    def add_files(self, files, replace=False):
+        expressions = f"^({'|'.join([f for f in files])})$".replace("\\", "\\\\")
+
         for widget in self.all_lists:
-            for file in files:
-                widget.insertItem(widget.count(), file)
+            items = [x.text for x in widget.findItems(expressions, Qt.MatchFlag.MatchRegularExpression)]
+            widget.insertItems(widget.count(), [file for file in files if file not in items])
+            widget.sortItems()
 
     def remove_files(self, files):
-        expressions = f"({'|'.join([f[0] for f in files])})".replace("\\", "\\\\")
+        expressions = f"^({'|'.join([f for f in files])})$".replace("\\", "\\\\")
         for widget in self.all_lists:
             items = widget.findItems(expressions, Qt.MatchFlag.MatchRegularExpression)
             for item in items:
@@ -808,7 +811,7 @@ class MainWindow(QMainWindow):
             if (name in t for t in deleted):
                 self.tabs.remove_tab(i)
 
-        self.listwidget.remove_files(deleted)
+        self.listwidget.remove_files([x[0] for x in deleted])
         QMessageBox.information(self, "Done", "File selection has been deleted")
 
     def clear_preview(self):
