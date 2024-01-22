@@ -546,6 +546,13 @@ class MainWindow(QMainWindow):
         self.update_archive_name()
         self.listwidget.update_list(True)
 
+        try:
+            with open(path, "wb") as f:
+                pass
+        except PermissionError:
+            QMessageBox.warning(self, "Warning", "The file you loaded is write-protected. You will not be able to save any changes. Copy this file to another directory and open it or relaunch FinalBIGv2 as admin if you are planning to modify it.")
+
+
     def _new(self):
         self.archive = Archive()
         self.path = None
