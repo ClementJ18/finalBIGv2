@@ -41,7 +41,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.10.1"
+__version__ = "0.10.2"
 
 basedir = os.path.dirname(__file__)
 
