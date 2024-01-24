@@ -41,7 +41,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.10.2"
+__version__ = "0.10.3"
 
 basedir = os.path.dirname(__file__)
 
@@ -193,7 +193,7 @@ class FileList(QListWidget):
     def add_folder(self, url):
         skip_all = False
         common_dir = os.path.dirname(url)
-        files = []
+        files_to_add = []
         for root, _, files in os.walk(url):
             for f in files:
                 full_path = os.path.join(root, f)
@@ -201,12 +201,12 @@ class FileList(QListWidget):
                 ret = self._add_file(full_path, name, blank=False, skip_all=skip_all)
 
                 if ret != QMessageBox.StandardButton.No:
-                    files.append(name)
+                    files_to_add.append(name)
 
                 if ret == QMessageBox.StandardButton.YesToAll:
                     skip_all = True
 
-        self.main.listwidget.add_files(files)
+        self.main.listwidget.add_files(files_to_add)
 
     def update_list(self):
         self.clear()
@@ -554,7 +554,7 @@ class MainWindow(QMainWindow):
 
 
     def _new(self):
-        self.archive = Archive()
+        self.archive = Archive.empty()
         self.path = None
         self.listwidget.update_list(True)
         self.update_archive_name()
