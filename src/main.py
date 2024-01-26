@@ -2,10 +2,11 @@ import fnmatch
 import os
 import re
 import sys
+import tempfile
 import traceback
 from typing import List
 
-from pyBIG import Archive
+from pyBIG import Archive, LargeArchive, utils
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut, QIcon, QAction
 from PyQt6.QtWidgets import (
@@ -41,7 +42,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.10.3"
+__version__ = "0.11.0"
 
 basedir = os.path.dirname(__file__)
 
@@ -177,15 +178,17 @@ class FileList(QListWidget):
 
         return ret
 
-    def add_file(self, url, blank=False):
-        name, ok = QInputDialog.getText(
-            self,
-            "Filename",
-            "Save the file under the following name:",
-            text=normalize_name(url),
-        )
-        if not ok:
-            return False
+    def add_file(self, url, *, blank=False, ask_name=True):
+        name = normalize_name(url)
+        if ask_name:
+            name, ok = QInputDialog.getText(
+                self,
+                "Filename",
+                "Save the file under the following name:",
+                text=name,
+            )
+            if not ok:
+                return False
 
         ret = self._add_file(url, name, blank)
         self.main.listwidget.add_files([name], ret is not None)
@@ -244,19 +247,20 @@ class FileListTabs(TabWidget):
             widget.update_list()
 
     def add_files(self, files, replace=False):
-        expressions = f"^({'|'.join([f for f in files])})$".replace("\\", "\\\\")
+        # expressions = f"^({'|'.join([f for f in files])})$".replace("\\", "\\\\")
 
         for widget in self.all_lists:
-            items = [x.text for x in widget.findItems(expressions, Qt.MatchFlag.MatchRegularExpression)]
+            # items = [x.text() for x in widget.findItems(expressions, Qt.MatchFlag.MatchRegularExpression)]
+            items = [widget.item(x).text() for x in range(widget.count())]
             widget.insertItems(widget.count(), [file for file in files if file not in items])
             widget.sortItems()
 
     def remove_files(self, files):
-        expressions = f"^({'|'.join([f for f in files])})$".replace("\\", "\\\\")
         for widget in self.all_lists:
-            items = widget.findItems(expressions, Qt.MatchFlag.MatchRegularExpression)
-            for item in items:
-                widget.takeItem(widget.row(item))
+            for x in range(widget.count()):
+                item = widget.item(x)
+                if item.text() in files:
+                    widget.takeItem(widget.row(item))
 
 
 class MainWindow(QMainWindow):
@@ -431,6 +435,7 @@ class MainWindow(QMainWindow):
         tools_menu = menu.addMenu("&Tools")
         tools_menu.addAction("Dump entire file list", lambda: self.dump_list(False))
         tools_menu.addAction("Dump filtered file list", lambda: self.dump_list(True))
+        tools_menu.addAction("Merge another archive", self.merge_archives)
 
         tools_menu.addSeparator()
 
@@ -460,6 +465,18 @@ class MainWindow(QMainWindow):
         self.use_external_action.setChecked(self.external)
         option_menu.addAction(self.use_external_action)
         option_menu.triggered.connect(self.toggle_external)
+
+        self.large_archive_action = QAction(
+            "Use Large Archive Architecture?", self, checkable=True
+        )
+        self.large_archive_action.setToolTip(
+            "Change the system to use Large Archives, a slower system that handles large files better"
+        )
+        self.large_archive_action.setChecked(
+            str_to_bool(self.settings.value("settings/large_archive", "0"))
+        )
+        option_menu.addAction(self.large_archive_action)
+        option_menu.triggered.connect(self.toggle_large_archives)
 
         self.preview_action = QAction("Preview?", self, checkable=True)
         self.preview_action.setToolTip("Enable previewing files")
@@ -496,6 +513,9 @@ class MainWindow(QMainWindow):
         self.settings.setValue("settings/external", int(value))
         self.settings.sync()
 
+    def is_using_large_archive(self):
+        return str_to_bool(self.settings.value("settings/large_archive", "0"))
+
     def is_file_selected(self):
         if not self.listwidget.active_list.selectedItems():
             QMessageBox.warning(self, "No file selected", "You have not selected a file")
@@ -523,6 +543,12 @@ class MainWindow(QMainWindow):
         try:
             self.archive.save(path)
             QMessageBox.information(self, "Done", "Archive has been saved")
+        except utils.MaxSizeError:
+            QMessageBox.warning(
+                self,
+                "File Size Error",
+                "File has reached maximum size, the BIG format only supports up to 4.3GB per archive. Please remove some files and try saving again.",
+            )
         except PermissionError:
             QMessageBox.critical(
                 self,
@@ -535,8 +561,11 @@ class MainWindow(QMainWindow):
 
     def _open(self, path):
         try:
-            with open(path, "rb") as f:
-                archive = Archive(f.read())
+            if self.is_using_large_archive():
+                archive = LargeArchive(path)
+            else:
+                with open(path, "rb") as f:
+                    archive = Archive(f.read())
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
             return
@@ -547,14 +576,20 @@ class MainWindow(QMainWindow):
         self.listwidget.update_list(True)
 
         try:
-            with open(path, "wb") as f:
-                pass
+            self.archive.save()
         except PermissionError:
-            QMessageBox.warning(self, "Warning", "The file you loaded is write-protected. You will not be able to save any changes. Copy this file to another directory and open it or relaunch FinalBIGv2 as admin if you are planning to modify it.")
-
+            QMessageBox.warning(
+                self,
+                "Warning",
+                "The file you loaded is write-protected. You will not be able to save any changes. Copy this file to another directory and open it or relaunch FinalBIGv2 as admin if you are planning to modify it.",
+            )
 
     def _new(self):
-        self.archive = Archive.empty()
+        self.archive = (
+            LargeArchive.empty(tempfile.NamedTemporaryFile().name)
+            if self.is_using_large_archive()
+            else Archive.empty()
+        )
         self.path = None
         self.listwidget.update_list(True)
         self.update_archive_name()
@@ -621,6 +656,13 @@ class MainWindow(QMainWindow):
         self.settings.setValue("settings/preview", int(self.preview_action.isChecked()))
         self.settings.sync()
 
+    def toggle_large_archives(self):
+        self.settings.setValue(
+            "settings/large_archive", int(self.large_archive_action.isChecked())
+        )
+        self.settings.sync()
+        QMessageBox.information(self, "Large Archive Setting Changed", f"The large archive settings has been {'enabled' if self.large_archive_action.isChecked() else 'disabled'}, please restart FinalBIGv2 to apply the change.")
+
     def toggle_dark_mode(self):
         is_checked = self.dark_mode_action.isChecked()
         self.dark_mode = is_checked
@@ -657,6 +699,88 @@ class MainWindow(QMainWindow):
             f.write("\n".join(file_list))
 
         QMessageBox.information(self, "Dump Generated", "File list dump has been created")
+
+    def merge_archives(self):
+        files = QFileDialog.getOpenFileNames(self, "Select an archive to merge", filter="*.big")[0]
+
+        if not files:
+            return
+
+        files.reverse()
+        files_added = []
+        for file in files:
+            files_added.extend(self._merge_archives(file))
+
+        self.listwidget.add_files(files_added)
+
+    def _merge_archives(self, path):
+        if self.is_using_large_archive():
+            archive = LargeArchive(path)
+        else:
+            with open(path, "rb") as f:
+                archive = Archive(f.read())
+
+        skip_all = False
+        files_added = []
+        files = archive.file_list()
+        length = len(files)
+        text_box = QMessageBox(
+            QMessageBox.Icon.Information,
+            "Processing archives",
+            f"Processing archive: <b>{path}</b><br>Getting ready to start processing archive. Found {length} files",
+            self,
+        )
+        text_box.setStandardButtons(0)
+    
+        text_box.show()
+        QApplication.processEvents()
+
+        for index, file in enumerate(files):
+            text_box.setText(
+                f"Processing archive: <b>{path}</b><br>File: ({index+1}/{length})<br>Processing: <b>{file}</b>"
+            )
+            QApplication.processEvents()
+            if self.archive.file_exists(file):
+                if not skip_all:
+                    ret = QMessageBox.question(
+                        self,
+                        "Overwrite file?",
+                        f"<b>{file}</b> already exists, overwrite?",
+                        QMessageBox.StandardButton.Yes
+                        | QMessageBox.StandardButton.No
+                        | QMessageBox.StandardButton.YesToAll,
+                        QMessageBox.StandardButton.No,
+                    )
+                    if ret == QMessageBox.StandardButton.No:
+                        continue
+
+                    if ret == QMessageBox.StandardButton.YesToAll:
+                        skip_all = True
+
+                self.archive.remove_file(file)
+
+            self.archive.add_file(file, archive.read_file(file))
+
+            files_added.append(file)
+
+            size = self.archive.archive_memory_size()
+            if size > 524288000:
+                print(f"reached {size}, dumping on file {index}")
+
+                try:
+                    self.archive.save()
+                except utils.MaxSizeError:
+                    QMessageBox.warning(
+                        self,
+                        "File Size Error",
+                        "File has reached maximum size, the BIG format only supports up to 4.3GB per archive.",
+                    )
+                    self.archive.modified_entries = {}
+                    break
+
+        text_box.close()
+
+        return files_added
 
     def search_archive(self, regex):
         search, ok = QInputDialog.getText(
