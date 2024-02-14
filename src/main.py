@@ -42,7 +42,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.11.0"
+__version__ = "0.11.1"
 
 basedir = os.path.dirname(__file__)
 
@@ -257,10 +257,17 @@ class FileListTabs(TabWidget):
 
     def remove_files(self, files):
         for widget in self.all_lists:
+            to_remove = []
             for x in range(widget.count()):
                 item = widget.item(x)
+                if item is None:
+                    continue
+
                 if item.text() in files:
-                    widget.takeItem(widget.row(item))
+                    to_remove.append(item)
+
+            for item in to_remove:
+                widget.takeItem(widget.row(item))
 
 
 class MainWindow(QMainWindow):
@@ -576,7 +583,7 @@ class MainWindow(QMainWindow):
         self.listwidget.update_list(True)
 
         try:
-            self.archive.save()
+            self.archive.save(self.path)
         except PermissionError:
             QMessageBox.warning(
                 self,
@@ -768,7 +775,7 @@ class MainWindow(QMainWindow):
                 print(f"reached {size}, dumping on file {index}")
 
                 try:
-                    self.archive.save()
+                    self.archive.save(self.path)
                 except utils.MaxSizeError:
                     QMessageBox.warning(
                         self,

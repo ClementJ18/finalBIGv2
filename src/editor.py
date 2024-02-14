@@ -112,34 +112,34 @@ class LexerBFME(QsciLexerCustom):
     def update_colors(self):
         if self.dark_mode:
             self.setColor(QColor(232, 232, 232, 1), 0)  # Style 0: light grey
-            self.setColor(QColor(142, 79, 161, 0.8), 1)  # Style 1: purple
-            self.setColor(QColor(222, 133, 222, 0.8), 2)  # Style 2: violet
-            self.setColor(QColor(0, 135, 0, 0.8), 3)  # Style 3: green
-            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
-            self.setColor(QColor(101, 87, 198, 0.8), 5)  # Style 5: Blue
-            self.setColor(QColor(216, 210, 75, 0.8), 6)
-            self.setColor(QColor(101, 187, 105, 0.8), 7)
-            self.setColor(QColor(101, 176, 187, 0.8), 8)
-            self.setColor(QColor(226, 103, 0, 0.8), 9)
+            self.setColor(QColor(142, 79, 161, 204), 1)  # Style 1: purple
+            self.setColor(QColor(222, 133, 222, 204), 2)  # Style 2: violet
+            self.setColor(QColor(0, 135, 0, 204), 3)  # Style 3: green
+            self.setColor(QColor(185, 40, 76, 204), 4)  # Style 4: red
+            self.setColor(QColor(101, 87, 198, 204), 5)  # Style 5: Blue
+            self.setColor(QColor(216, 210, 75, 204), 6)
+            self.setColor(QColor(101, 187, 105, 204), 7)
+            self.setColor(QColor(101, 176, 187, 204), 8)
+            self.setColor(QColor(226, 103, 0, 204), 9)
 
-            self.parent().setCaretForegroundColor(QColor(255, 255, 255, 0.3))
+            self.parent().setCaretForegroundColor(QColor(255, 255, 255, 73))
             self.setPaper(QColor(0, 0, 0, 0))
             self.setDefaultPaper(QColor(0, 0, 0, 0))
         else:
-            self.setColor(QColor(0, 0, 0, 0.8), 0)  # Style 0: black
-            self.setColor(QColor(105, 40, 124, 0.8), 1)  # Style 1: purple
-            self.setColor(QColor(13, 0, 161, 0.8), 2)  # Style 2: blue
+            self.setColor(QColor(0, 0, 0, 204), 0)  # Style 0: black
+            self.setColor(QColor(105, 40, 124, 204), 1)  # Style 1: purple
+            self.setColor(QColor(13, 0, 161, 204), 2)  # Style 2: blue
             self.setColor(QColor(59, 125, 61, 1), 3)  # Style 3: green
-            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
-            self.setColor(QColor(50, 34, 166, 0.8), 5)  # Style 5: Blue
-            self.setColor(QColor(216, 210, 75, 0.8), 6)
-            self.setColor(QColor(101, 187, 105, 0.8), 7)
-            self.setColor(QColor(101, 176, 187, 0.8), 8)
-            self.setColor(QColor(226, 103, 0, 0.8), 9)
+            self.setColor(QColor(185, 40, 76, 204), 4)  # Style 4: red
+            self.setColor(QColor(50, 34, 166, 204), 5)  # Style 5: Blue
+            self.setColor(QColor(216, 210, 75, 204), 6)
+            self.setColor(QColor(101, 187, 105, 204), 7)
+            self.setColor(QColor(101, 176, 187, 204), 8)
+            self.setColor(QColor(226, 103, 0, 204), 9)
 
-            self.parent().setCaretForegroundColor(QColor(0, 0, 0, 0.8))
-            self.setPaper(QColor(255, 255, 255, 0.3))
-            self.setDefaultPaper(QColor(255, 255, 255, 0.3))
+            self.parent().setCaretForegroundColor(QColor(0, 0, 0, 204))
+            self.setPaper(QColor(255, 255, 255, 73))
+            self.setDefaultPaper(QColor(255, 255, 255, 73))
 
     def language(self) -> str:
         return "BFMEini"
@@ -221,35 +221,35 @@ class DefaultLexer(QsciLexerCustom):
 
     def update_colors(self):
         if self.dark_mode:
-            self.setColor(QColor(232, 232, 232, 1), 0)  # Style 0: light grey
-            self.setColor(QColor(142, 79, 161, 0.8), 1)  # Style 1: purple
-            self.setColor(QColor(222, 133, 222, 0.8), 2)  # Style 2: violet
-            self.setColor(QColor(0, 135, 0, 0.8), 3)  # Style 3: green
-            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
-            self.setColor(QColor(101, 87, 198, 0.8), 5)  # Style 5: Blue
-            self.setColor(QColor(216, 210, 75, 0.8), 6)
-            self.setColor(QColor(101, 187, 105, 0.8), 7)
-            self.setColor(QColor(101, 176, 187, 0.8), 8)
-            self.setColor(QColor(226, 103, 0, 0.8), 9)
+            self.setColor(QColor(232, 232, 232, 255), 0)  # Style 0: light grey
+            self.setColor(QColor(142, 79, 161, 204), 1)  # Style 1: purple
+            self.setColor(QColor(222, 133, 222, 204), 2)  # Style 2: violet
+            self.setColor(QColor(0, 135, 0, 204), 3)  # Style 3: green
+            self.setColor(QColor(185, 40, 76, 204), 4)  # Style 4: red
+            self.setColor(QColor(101, 87, 198, 204), 5)  # Style 5: Blue
+            self.setColor(QColor(216, 210, 75, 204), 6)
+            self.setColor(QColor(101, 187, 105, 204), 7)
+            self.setColor(QColor(101, 176, 187, 204), 8)
+            self.setColor(QColor(226, 103, 0, 204), 9)
 
-            self.parent().setCaretForegroundColor(QColor(255, 255, 255, 0.3))
+            self.parent().setCaretForegroundColor(QColor(255, 255, 255, 73))
             self.setPaper(QColor(0, 0, 0, 0))
             self.setDefaultPaper(QColor(0, 0, 0, 0))
         else:
-            self.setColor(QColor(0, 0, 0, 0.8), 0)  # Style 0: black
-            self.setColor(QColor(105, 40, 124, 0.8), 1)  # Style 1: purple
-            self.setColor(QColor(13, 0, 161, 0.8), 2)  # Style 2: blue
-            self.setColor(QColor(59, 125, 61, 1), 3)  # Style 3: green
-            self.setColor(QColor(185, 40, 76, 0.8), 4)  # Style 4: red
-            self.setColor(QColor(50, 34, 166, 0.8), 5)  # Style 5: Blue
-            self.setColor(QColor(216, 210, 75, 0.8), 6)
-            self.setColor(QColor(101, 187, 105, 0.8), 7)
-            self.setColor(QColor(101, 176, 187, 0.8), 8)
-            self.setColor(QColor(226, 103, 0, 0.8), 9)
+            self.setColor(QColor(0, 0, 0, 204), 0)  # Style 0: black
+            self.setColor(QColor(105, 40, 124, 204), 1)  # Style 1: purple
+            self.setColor(QColor(13, 0, 161, 204), 2)  # Style 2: blue
+            self.setColor(QColor(59, 125, 61, 255), 3)  # Style 3: green
+            self.setColor(QColor(185, 40, 76, 204), 4)  # Style 4: red
+            self.setColor(QColor(50, 34, 166, 204), 5)  # Style 5: Blue
+            self.setColor(QColor(216, 210, 75, 204), 6)
+            self.setColor(QColor(101, 187, 105, 204), 7)
+            self.setColor(QColor(101, 176, 187, 204), 8)
+            self.setColor(QColor(226, 103, 0, 204), 9)
 
-            self.parent().setCaretForegroundColor(QColor(0, 0, 0, 0.8))
-            self.setPaper(QColor(255, 255, 255, 0.3))
-            self.setDefaultPaper(QColor(255, 255, 255, 0.3))
+            self.parent().setCaretForegroundColor(QColor(0, 0, 0, 204))
+            self.setPaper(QColor(255, 255, 255, 73))
+            self.setDefaultPaper(QColor(255, 255, 255, 73))
 
     def language(self) -> str:
         return "BFMEstr"
