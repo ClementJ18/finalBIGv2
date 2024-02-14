@@ -42,7 +42,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.11.1"
+__version__ = "0.11.2"
 
 basedir = os.path.dirname(__file__)
 
@@ -462,16 +462,16 @@ class MainWindow(QMainWindow):
         self.dark_mode_action = QAction("Dark Mode?", self, checkable=True)
         self.dark_mode_action.setToolTip("Whether to use dark mode or not")
         self.dark_mode_action.setChecked(self.dark_mode)
+        self.dark_mode_action.triggered.connect(self.toggle_dark_mode)
         option_menu.addAction(self.dark_mode_action)
-        option_menu.triggered.connect(self.toggle_dark_mode)
 
         self.use_external_action = QAction("Use external programs?", self, checkable=True)
         self.use_external_action.setToolTip(
             "Whether to open using the internal editor or the user's default application"
         )
         self.use_external_action.setChecked(self.external)
+        self.use_external_action.triggered.connect(self.toggle_external)
         option_menu.addAction(self.use_external_action)
-        option_menu.triggered.connect(self.toggle_external)
 
         self.large_archive_action = QAction(
             "Use Large Archive Architecture?", self, checkable=True
@@ -482,14 +482,14 @@ class MainWindow(QMainWindow):
         self.large_archive_action.setChecked(
             str_to_bool(self.settings.value("settings/large_archive", "0"))
         )
+        self.large_archive_action.triggered.connect(self.toggle_large_archives)
         option_menu.addAction(self.large_archive_action)
-        option_menu.triggered.connect(self.toggle_large_archives)
 
         self.preview_action = QAction("Preview?", self, checkable=True)
         self.preview_action.setToolTip("Enable previewing files")
         self.preview_action.setChecked(str_to_bool(self.settings.value("settings/preview", "1")))
+        self.preview_action.triggered.connect(self.toggle_preview)
         option_menu.addAction(self.preview_action)
-        option_menu.triggered.connect(self.toggle_preview)
 
         option_menu.addAction("Set encoding", self.set_encoding)
 
