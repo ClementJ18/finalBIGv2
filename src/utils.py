@@ -3,10 +3,10 @@ HELP_STRING = """
 <h2>Shortcuts</h2>
 <ul>
     {shortcuts}
-</ul> 
+</ul>
 
 <h2> File Search </h2>
-File search is based on Unix filename pattern. This means that something like 
+File search is based on Unix filename pattern. This means that something like
 "sauron.ini" will look for a file called exactly "sauron.ini". If you're looking for
 something like "data/ini/objects/sauron.ini" make sure you add a * to match everything
 before. Like "*/sauron.ini".<br/>
@@ -25,9 +25,9 @@ ABOUT_STRING = """
 <b>FinalBIGv2</b> was made by officialNecro because he was getting very annoyed at
 FinalBIG crashing all the time. It's not perfect either but it works on his machine and
 maybe it'll work on other people's machines.<br/>
-
-Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>. 
+<a>Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>.
 Suggestions and bug reports should also go there. <br/><br/>
+Updated by Tria For C&C Generals (BIGF support) & Additional Changes.
 
 Version: <b>{version}</b>
 """
