@@ -1,19 +1,17 @@
 import io
 import os
 import shutil
+import struct
 import tempfile
-import threading
 import traceback
 import webbrowser
 
-import audio_metadata
-import tbm_utils
 from PIL import Image
 from PIL.ImageQt import ImageQt
-from pyBIG import Archive
-from pydub import AudioSegment
-from pydub.playback import play
+from pyBIG.base_archive import BaseArchive
+from PyQt6.QtCore import QUrl, Qt, QTemporaryFile
 from PyQt6.QtGui import QPixmap
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -24,6 +22,8 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QScrollArea,
+    QSlider,
 )
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -34,8 +34,8 @@ from utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
 
 
 class GenericTab(QWidget):
-    def __init__(self, main: QMainWindow, archive: Archive, name):
-        super().__init__()
+    def __init__(self, main: QMainWindow, archive: BaseArchive, name):
+        super().__init__(main)
 
         self.archive = archive
         self.main = main
@@ -112,7 +112,7 @@ class TextTab(GenericTab):
         search_layout = QHBoxLayout()
         search_widget.setLayout(search_layout)
 
-        if self.file_type in (".inc", ".ini"):
+        if self.file_type.lower() in (".inc", ".ini", ".wnd", ".txt", ".xml", ".lua", ".str"):
             highlighting = QCheckBox("Highlighting")
             highlighting.setToolTip("Enable/disable syntax highlighting")
             highlighting.setChecked(True)
@@ -159,7 +159,9 @@ class TextTab(GenericTab):
         else:
             self.text_widget.findNext()
 
-        if not any(self.search.itemText(x) == search for x in range(self.search.count())):
+        if search and not any(
+            self.search.itemText(x) == search for x in range(self.search.count())
+        ):
             self.search.addItem(search)
 
         if self.search.count() > SEARCH_HISTORY_MAX:
@@ -183,31 +185,97 @@ class TextTab(GenericTab):
 
 
 class ImageTab(GenericTab):
-    def __init__(self, main: QMainWindow, archive: Archive, name):
+    def __init__(self, main: QMainWindow, archive: BaseArchive, name):
         super().__init__(main, archive, name)
 
         self.scale = 1
+        self.image = None
+        self.qimage = None
+        self.pixmap = None
+        self.image_label = None
+        self.showing_alpha = False
+
+    @staticmethod
+    def _get_dds_mipmap_count(dds_data: bytes) -> int:
+        if len(dds_data) < 32:
+            return 1
+
+        dwFlags = struct.unpack_from("<I", dds_data, 8)[0]
+        if dwFlags & 0x20000:
+            return struct.unpack_from("<I", dds_data, 28)[0]
+
+        return 1
+
+    @staticmethod
+    def _get_dds_format(dds_data: bytes) -> str:
+        if len(dds_data) < 88:
+            return "N/A"
+
+        if struct.unpack_from("<I", dds_data, 80)[0] & 0x4:
+            return (
+                struct.unpack_from("<4s", dds_data, 84)[0].decode("ascii", errors="ignore").strip()
+            )
+        else:
+            return "Uncompressed"
 
     def generate_layout(self):
-        self.layout = QVBoxLayout()
+        main_layout = QVBoxLayout(self)
+        self.image_label = QLabel(self)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidget(self.image_label)
+        scroll_area.setWidgetResizable(True)
+        main_layout.addWidget(scroll_area)
+
+        controls_layout = QHBoxLayout()
+
+        self.alpha_button = QPushButton("Show Alpha")
+        self.alpha_button.clicked.connect(self.toggle_alpha_view)
+        controls_layout.addWidget(self.alpha_button)
+
+        main_layout.addLayout(controls_layout)
 
         try:
-            self.bytes = io.BytesIO(self.data)
-            self.image = Image.open(self.bytes)
-            self.qimage = ImageQt(self.image)
-            self.pixmap = QPixmap.fromImage(self.qimage)
+            self.image = Image.open(io.BytesIO(self.data))
 
-            self.label = QLabel(self)
-            self.label.setScaledContents(True)
-            self.label.setPixmap(self.pixmap)
-            self.layout.addWidget(self.label)
+            if self.image.mode not in ("RGBA", "LA"):
+                self.alpha_button.setEnabled(False)
+
+            width, height = self.image.size
+            controls_layout.addWidget(QLabel(f"<b>Dimensions:</b> {width}x{height}"))
+
+            if self.file_type.lower() == ".tga":
+                bit_depth = {"RGBA": "32-bit", "RGB": "24-bit"}.get(self.image.mode, "N/A")
+                controls_layout.addWidget(QLabel(f"<b>Format:</b> {bit_depth}"))
+            elif self.file_type.lower() == ".dds":
+                controls_layout.addWidget(
+                    QLabel(f"<b>Format:</b> {self._get_dds_format(self.data)}")
+                )
+                controls_layout.addWidget(
+                    QLabel(f"<b>Mipmaps:</b> {self._get_dds_mipmap_count(self.data)}")
+                )
+
+            controls_layout.addStretch()
+            self.update_display()
         except Exception as e:
-            self.error = QTextEdit(self)
-            self.error.setReadOnly(True)
-            self.error.setText(f"Couldn't convert image:\n{e}")
-            self.layout.addWidget(self.error)
+            error_box = QTextEdit(self)
+            error_box.setReadOnly(True)
+            error_box.setText(f"Couldn't display image:\n{e}\n\n{traceback.format_exc()}")
+            main_layout.addWidget(error_box)
 
-        self.setLayout(self.layout)
+    def toggle_alpha_view(self):
+        self.showing_alpha = not self.showing_alpha
+        self.update_display()
+
+    def update_display(self):
+        if not self.image:
+            return
+
+        display_image = self.image.getchannel("A") if self.showing_alpha else self.image
+        self.alpha_button.setText("Show Color" if self.showing_alpha else "Show Alpha")
+        self.qimage = ImageQt(display_image)
+        self.pixmap = QPixmap.fromImage(self.qimage)
+        self.image_label.setPixmap(self.pixmap)
 
 
 class CustomHeroTab(GenericTab):
@@ -241,34 +309,108 @@ class CustomHeroTab(GenericTab):
 
 
 class SoundTab(GenericTab):
+    def __init__(self, main: QMainWindow, archive: BaseArchive, name):
+        super().__init__(main, archive, name)
+        self.player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.player.setAudioOutput(self.audio_output)
+        self.temp_audio_file = None  # Keep alive for full session
+
     def generate_layout(self):
         layout = QVBoxLayout()
 
-        self.song = AudioSegment.from_file(io.BytesIO(self.data), format=self.file_type[1:])
+        try:
+            # Create a temporary file that persists for the object's lifetime
+            self.temp_audio_file = QTemporaryFile(f"dummy{self.file_type}")
+            self.temp_audio_file.setAutoRemove(False)  # Keep until manual cleanup
+            if not self.temp_audio_file.open():
+                raise RuntimeError("Could not open temporary audio file.")
 
-        play_button = QPushButton(self)
-        play_button.setText("Play")
-        play_button.clicked.connect(self.play_audio)
-        layout.addWidget(play_button)
+            # Write data and rewind to start
+            self.temp_audio_file.write(self.data)
+            self.temp_audio_file.flush()
+            self.temp_audio_file.seek(0)
 
-        metadata = audio_metadata.loads(self.data)
+            # Set media source from the temp file path
+            self.player.setSource(QUrl.fromLocalFile(self.temp_audio_file.fileName()))
 
-        data = QTextEdit(self)
-        data.setReadOnly(True)
-        data.setText(
-            f"""
-            File: {self.name}
-            Size: {tbm_utils.humanize_filesize(metadata.filesize)}
-            Duration: {tbm_utils.humanize_duration(metadata.streaminfo.duration)}
-            """
-        )
+        except Exception as e:
+            error_box = QTextEdit(self)
+            error_box.setReadOnly(True)
+            error_box.setText(f"Could not load audio:\n{e}")
+            layout.addWidget(error_box)
+            self.setLayout(layout)
+            return
 
-        layout.addWidget(data)
+        # Controls
+        controls_layout = QHBoxLayout()
+        self.play_button = QPushButton("Play")
+        controls_layout.addWidget(self.play_button)
+        self.stop_button = QPushButton("Stop")
+        controls_layout.addWidget(self.stop_button)
+
+        # Progress bar
+        progress_layout = QHBoxLayout()
+        self.time_label = QLabel("00:00")
+        self.time_slider = QSlider(Qt.Orientation.Horizontal)
+        self.duration_label = QLabel("00:00")
+        progress_layout.addWidget(self.time_label)
+        progress_layout.addWidget(self.time_slider)
+        progress_layout.addWidget(self.duration_label)
+
+        layout.addLayout(controls_layout)
+        layout.addLayout(progress_layout)
         self.setLayout(layout)
 
-    def play_audio(self):
-        t = threading.Thread(target=play, args=(self.song,))
-        t.start()
+        # Connections
+        self.play_button.clicked.connect(self.toggle_playback)
+        self.stop_button.clicked.connect(self.player.stop)
+        self.time_slider.sliderMoved.connect(self.set_position)
+        self.player.positionChanged.connect(self.update_slider_position)
+        self.player.durationChanged.connect(self.update_duration)
+        self.player.playbackStateChanged.connect(self.update_button_state)
+
+    def toggle_playback(self):
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.player.pause()
+        else:
+            # If playback reached the end, reload the source to ensure replay works
+            if self.player.position() >= self.player.duration() and self.temp_audio_file:
+                self.temp_audio_file.seek(0)  # Ensure file pointer at start
+                self.player.setSource(QUrl.fromLocalFile(self.temp_audio_file.fileName()))
+            self.player.play()
+
+    def update_button_state(self, state):
+        self.play_button.setText(
+            "Pause" if state == QMediaPlayer.PlaybackState.PlayingState else "Play"
+        )
+
+    def format_time(self, ms):
+        s = int(ms / 1000)
+        return f"{int(s / 60):02d}:{s % 60:02d}"
+
+    def update_duration(self, d):
+        self.time_slider.setRange(0, d)
+        self.duration_label.setText(self.format_time(d))
+
+    def update_slider_position(self, p):
+        self.time_slider.setValue(p)
+        self.time_label.setText(self.format_time(p))
+
+    def set_position(self, p):
+        self.player.setPosition(p)
+
+    def deleteLater(self):
+        self.player.stop()
+        self.player.setSource(QUrl())
+        if self.temp_audio_file:
+            path = self.temp_audio_file.fileName()
+            self.temp_audio_file.close()
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        super().deleteLater()
 
 
 class SaveEventHandler(FileSystemEventHandler):
@@ -289,7 +431,7 @@ class SaveEventHandler(FileSystemEventHandler):
 
 
 class MapTab(GenericTab):
-    def __init__(self, main: QMainWindow, archive: Archive, name):
+    def __init__(self, main: QMainWindow, archive: BaseArchive, name):
         super().__init__(main, archive, name)
 
         self.observer = None
@@ -327,6 +469,7 @@ class MapTab(GenericTab):
     def deleteLater(self) -> None:
         if self.observer is not None:
             self.observer.stop()
+            self.observer.join()
             shutil.rmtree(self.tmp.name, True)
 
         return super().deleteLater()
@@ -345,19 +488,18 @@ class MapTab(GenericTab):
 
 
 TAB_TYPES = {
-    (".lua", ".inc", ".ini", ".str", ".xml"): TextTab,
     (".bse", ".map"): MapTab,
-    (".wav",): SoundTab,
+    (".wav", ".mp3"): SoundTab,
     (".cah",): CustomHeroTab,
     tuple(Image.registered_extensions().keys()): ImageTab,
 }
 
 
 def get_tab_from_file_type(name: str) -> GenericTab:
-    file_type = os.path.splitext(name)[1]
+    file_type = os.path.splitext(name)[1].lower()
 
     for key, value in TAB_TYPES.items():
         if file_type in key:
             return value
 
-    return GenericTab
+    return TextTab

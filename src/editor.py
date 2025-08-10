@@ -151,64 +151,81 @@ class LexerBFME(QsciLexerCustom):
         if not self.toggled:
             return
 
-        if self.first_pass:
-            self.startStyling(0)
-            text = self.parent().text()
-            self.first_pass = False
-        else:
-            self.startStyling(start)
-            text = self.parent().text()[start:end]
+        editor = self.parent()
+
+        # Get raw bytes for the given range
+        length = end - start
+        byte_array = bytearray(length)
+        ptr = memoryview(byte_array)
+        editor.SendScintilla(editor.SCI_GETTEXTRANGE, start, end, ptr)
+
+        try:
+            text = byte_array.decode("utf-8")
+        except UnicodeDecodeError:
+            text = byte_array.decode("utf-8", errors="replace")
+
+        self.startStyling(start)
 
         p = re.compile(r"[*]\/|\/[*]|\s+|\w+|\W")
-        # DO NOT CHANGE ENCODING
-        token_list = [(token, len(bytearray(token, "utf-8"))) for token in p.findall(text)]
+        token_list = p.findall(text)
 
-        editor = self.parent()
         apply_until_linebreak = None
         apply_to_next_token = None
         apply_to_string = None
 
+        # Carry over style if we're in the middle of a comment/string
         if start > 0:
-            previous_style_nr = editor.SendScintilla(editor.SCI_GETSTYLEAT, start - 1)
-            if previous_style_nr in [2, 3]:
-                apply_until_linebreak = previous_style_nr
+            # Get the byte before `start`
+            prev_byte = bytearray(1)
+            editor.SendScintilla(editor.SCI_GETTEXTRANGE, start - 1, start, memoryview(prev_byte))
+            prev_char = prev_byte.decode("utf-8", errors="ignore") or ""
+
+            prev_style = editor.SendScintilla(editor.SCI_GETSTYLEAT, start - 1)
+
+            # Only continue if previous style was a comment and previous char wasn't newline
+            if prev_style in [2, 3] and prev_char not in ("\n", "\r"):
+                apply_until_linebreak = prev_style
 
         for token in token_list:
+            token_bytes = token.encode("utf-8")
+            byte_len = len(token_bytes)
+
             if apply_until_linebreak is not None:
-                if "\n" in token[0]:
+                self.setStyling(byte_len, apply_until_linebreak)
+                if "\n" in token:
                     apply_until_linebreak = None
-                    self.setStyling(token[1], 0)
-                else:
-                    self.setStyling(token[1], apply_until_linebreak)
+
             elif apply_to_next_token is not None:
-                self.setStyling(token[1], apply_to_next_token)
+                self.setStyling(byte_len, apply_to_next_token)
                 apply_to_next_token = None
+
             elif apply_to_string is not None:
-                self.setStyling(token[1], apply_to_string)
-                if token[0] == '"':
+                self.setStyling(byte_len, apply_to_string)
+                if token == '"':
                     apply_to_string = None
+
             else:
                 if token[0].isdigit() or token[0] in ["%"]:
-                    self.setStyling(token[1], 1)
+                    self.setStyling(byte_len, 1)
                 elif token[0] == "#":
                     apply_to_next_token = 2
-                    self.setStyling(token[1], 2)
+                    self.setStyling(byte_len, 2)
                 elif token[0] in ["/", ";"]:
                     apply_until_linebreak = 3
-                    self.setStyling(token[1], 3)
+                    self.setStyling(byte_len, 3)
                 elif token[0].lower() in CODEBLOCKS:
-                    self.setStyling(token[1], 4)
+                    self.setStyling(byte_len, 4)
                 elif token[0].lower() in SINGLETONS:
-                    self.setStyling(token[1], 5)
-                elif token[0].startswith('"'):
-                    self.setStyling(token[1], 6)
+                    self.setStyling(byte_len, 5)
+                elif token.startswith('"'):
+                    self.setStyling(byte_len, 6)
                     apply_to_string = 6
-                elif BEHAVIORS_PATTERN.match(token[0]):
-                    self.setStyling(token[1], 8)
-                elif KEYWORDS_PATTERN.match(token[0]):
-                    self.setStyling(token[1], 7)
+                elif BEHAVIORS_PATTERN.match(token):
+                    self.setStyling(byte_len, 8)
+                elif KEYWORDS_PATTERN.match(token):
+                    self.setStyling(byte_len, 7)
                 else:
-                    self.setStyling(token[1], 0)
+                    self.setStyling(byte_len, 0)
 
 
 class DefaultLexer(QsciLexerCustom):

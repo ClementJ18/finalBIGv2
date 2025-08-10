@@ -1,4 +1,5 @@
 SEARCH_HISTORY_MAX = 20
+RECENT_FILES_MAX = 10
 HELP_STRING = """
 <h2>Shortcuts</h2>
 <ul>
@@ -27,7 +28,8 @@ FinalBIG crashing all the time. It's not perfect either but it works on his mach
 maybe it'll work on other people's machines.<br/>
 
 Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>. 
-Suggestions and bug reports should also go there. <br/><br/>
+Suggestions and bug reports should also go there. 
+Updated by Tria For C&C Generals (BIGF support) & Additional Changes.<br/><br/>
 
 Version: <b>{version}</b>
 """

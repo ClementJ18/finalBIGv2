@@ -6,7 +6,7 @@ import tempfile
 import traceback
 from typing import List
 
-from pyBIG import Archive, LargeArchive, utils
+from pyBIG import InMemoryArchive, InDiskArchive, utils
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut, QIcon, QAction
 from PyQt6.QtWidgets import (
@@ -34,6 +34,7 @@ from utils import (
     ABOUT_STRING,
     ENCODING_LIST,
     HELP_STRING,
+    RECENT_FILES_MAX,
     SEARCH_HISTORY_MAX,
     is_preview,
     is_unsaved,
@@ -42,7 +43,7 @@ from utils import (
     str_to_bool,
 )
 
-__version__ = "0.11.2"
+__version__ = "0.12.0"
 
 basedir = os.path.dirname(__file__)
 
@@ -66,10 +67,11 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 sys.excepthook = handle_exception
 
 
+# fix this to use generic functions to work with large archive
 class ArchiveSearchThread(QThread):
     matched = pyqtSignal(tuple)
 
-    def __init__(self, parent, search, encoding, archive: Archive, regex) -> None:
+    def __init__(self, parent, search, encoding, archive: InMemoryArchive, regex) -> None:
         super().__init__(parent)
 
         self.search = search
@@ -141,10 +143,11 @@ class FileList(QListWidget):
         md = event.mimeData()
         if md.hasUrls():
             for url in md.urls():
-                if os.path.isfile(url.toLocalFile()):
-                    self.add_file(url.toLocalFile())
+                local_file = url.toLocalFile()
+                if os.path.isfile(local_file):
+                    self.add_file(local_file)
                 else:
-                    self.add_folder(url.toLocalFile())
+                    self.add_folder(local_file)
 
             event.acceptProposedAction()
 
@@ -187,11 +190,12 @@ class FileList(QListWidget):
                 "Save the file under the following name:",
                 text=name,
             )
-            if not ok:
+            if not ok or not name:
                 return False
 
         ret = self._add_file(url, name, blank)
-        self.main.listwidget.add_files([name], ret is not None)
+        if ret != QMessageBox.StandardButton.No:
+            self.main.listwidget.add_files([name], ret is not None)
 
     def add_folder(self, url):
         skip_all = False
@@ -212,9 +216,11 @@ class FileList(QListWidget):
         self.main.listwidget.add_files(files_to_add)
 
     def update_list(self):
+        if self.main.archive is None:
+            return
+
         self.clear()
-        for index, entry in enumerate(self.main.archive.file_list()):
-            self.insertItem(index, entry)
+        self.addItems(self.main.archive.file_list())
 
         self.main.filter_list()
 
@@ -235,11 +241,17 @@ class FileListTabs(TabWidget):
 
     @property
     def all_lists(self) -> List[FileList]:
-        return [self.widget(i) for i in range(self.count() - 1)]
+        return [
+            self.widget(i) for i in range(self.count() - 1) if isinstance(self.widget(1), FileList)
+        ]
 
     @property
     def all_but_active(self) -> List[FileList]:
-        return [self.widget(i) for i in range(self.count() - 1) if i != self.currentIndex()]
+        return [
+            self.widget(i)
+            for i in range(self.count() - 1)
+            if i != self.currentIndex() and isinstance(self.widget(1), FileList)
+        ]
 
     def update_list(self, all=False):
         to_update = self.all_lists if all else [self.active_list]
@@ -247,27 +259,25 @@ class FileListTabs(TabWidget):
             widget.update_list()
 
     def add_files(self, files, replace=False):
-        # expressions = f"^({'|'.join([f for f in files])})$".replace("\\", "\\\\")
-
         for widget in self.all_lists:
-            # items = [x.text() for x in widget.findItems(expressions, Qt.MatchFlag.MatchRegularExpression)]
             items = [widget.item(x).text() for x in range(widget.count())]
-            widget.insertItems(widget.count(), [file for file in files if file not in items])
-            widget.sortItems()
+            new_files = [file for file in files if file not in items]
 
-    def remove_files(self, files):
+            if new_files:
+                widget.insertItems(widget.count(), new_files)
+                widget.sortItems()
+
+    def remove_files(self, files: List[str]):
         for widget in self.all_lists:
-            to_remove = []
-            for x in range(widget.count()):
-                item = widget.item(x)
-                if item is None:
-                    continue
+            file_list = files.copy()
+            for i in reversed(range(widget.count())):
+                file = widget.item(i).text()
+                if file in file_list:
+                    widget.takeItem(i)
+                    file_list.remove(file)
 
-                if item.text() in files:
-                    to_remove.append(item)
-
-            for item in to_remove:
-                widget.takeItem(widget.row(item))
+                if not file_list:
+                    break
 
 
 class MainWindow(QMainWindow):
@@ -279,7 +289,11 @@ class MainWindow(QMainWindow):
         self.search_archive_regex_bool = False
         self.tab_current_index = 0
 
+        self.archive = None
+        self.path = None
+
         self.settings = QSettings("Necro inc.", "FinalBIGv2")
+        self.recent_files = self.settings.value("history/recent_files", [], type=list)
 
         if self.dark_mode:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
@@ -309,8 +323,7 @@ class MainWindow(QMainWindow):
         self.search.setEditable(True)
         search_layout.addWidget(self.search, stretch=5)
 
-        self.search_button = QPushButton(self)
-        self.search_button.setText("Filter file list")
+        self.search_button = QPushButton("Filter file list", self)
         self.search_button.clicked.connect(self.filter_list)
         search_layout.addWidget(self.search_button, stretch=1)
 
@@ -324,13 +337,17 @@ class MainWindow(QMainWindow):
         )
         search_layout.addWidget(self.re_filter_box)
 
+        self.regex_filter_box = QCheckBox("Regex?", self)
+        search_layout.addWidget(self.regex_filter_box)
+
         self.tabs = TabWidget(self)
         self.tabs.setElideMode(Qt.TextElideMode.ElideLeft)
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.setUsesScrollButtons(True)
+        self.tabs.tabBar().installEventFilter(self)
 
-        splitter = QSplitter(self)
+        splitter = QSplitter(Qt.Orientation.Horizontal, self)
         splitter.setOrientation(Qt.Orientation.Horizontal)
         splitter.addWidget(self.listwidget)
         splitter.addWidget(self.tabs)
@@ -341,22 +358,71 @@ class MainWindow(QMainWindow):
         self.create_menu()
         self.create_shortcuts()
 
-        try:
-            path_arg = sys.argv[1]
-        except IndexError:
-            path_arg = ""
-
-        if os.path.exists(path_arg):
-            self._open(path_arg)
-        else:
-            self._new()
-
         self.add_file_list()
+        self.close_archive()
+
+        path_arg = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else None
+        if path_arg:
+            self._open(path_arg)
 
         widget = QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
         self.showMaximized()
+
+    def close_archive(self):
+        if not self.close_unsaved():
+            return False
+
+        self.archive = None
+        self.path = None
+        self._close_all_tabs()
+
+        if hasattr(self, "listwidget"):
+            self.listwidget.update_list(True)
+
+        self.update_archive_name("No Archive Open")
+        self.update_ui_state()
+
+        return True
+
+    def _close_all_tabs(self):
+        for i in reversed(range(self.tabs.count())):
+            self._remove_file_tab(i)
+
+    def update_ui_state(self):
+        is_archive_open = self.archive is not None
+        if hasattr(self, "save_action"):
+            for action in [self.close_action, self.save_action, self.save_as_action]:
+                action.setEnabled(is_archive_open)
+            for name in ["&Edit", "&Tools"]:
+                menu = self.menuBar().findChild(QMenu, name)
+                if menu:
+                    menu.setEnabled(is_archive_open)
+
+    def _add_to_recent_files(self, path):
+        if path in self.recent_files:
+            self.recent_files.remove(path)
+        self.recent_files.insert(0, path)
+        del self.recent_files[RECENT_FILES_MAX:]
+        self.settings.setValue("history/recent_files", self.recent_files)
+        self._update_recent_files_menu()
+
+    def _update_recent_files_menu(self):
+        self.recent_menu.clear()
+        if not self.recent_files:
+            action = self.recent_menu.addAction("No Recent Files")
+            action.setEnabled(False)
+            return
+        for path in self.recent_files:
+            action = self.recent_menu.addAction(os.path.basename(path), self._open_recent_file)
+            action.setData(path)
+            action.setToolTip(path)
+
+    def _open_recent_file(self):
+        action = self.sender()
+        if action:
+            self._open(action.data())
 
     def create_shortcuts(self):
         self.shorcuts = [
@@ -425,6 +491,9 @@ class MainWindow(QMainWindow):
         file_menu.addAction("Open", self.open)
         file_menu.addAction("Save", self.save)
         file_menu.addAction("Save as...", self.save_as)
+        self.recent_menu = QMenu("Open Recent", self)
+        file_menu.addMenu(self.recent_menu)
+        self._update_recent_files_menu()
 
         edit_menu = menu.addMenu("&Edit")
         edit_menu.addAction("New file", self.new_file)
@@ -538,7 +607,9 @@ class MainWindow(QMainWindow):
 
     def _save(self, path):
         if path is None:
-            path = QFileDialog.getSaveFileName(self, "Save archive", "", "BIG files (*.big)")[0]
+            path = QFileDialog.getSaveFileName(
+                self, "Save archive", "", "Big files (*.big);;All files (*)"
+            )[0]
 
         if not path:
             return
@@ -569,10 +640,10 @@ class MainWindow(QMainWindow):
     def _open(self, path):
         try:
             if self.is_using_large_archive():
-                archive = LargeArchive(path)
+                archive = InDiskArchive(path)
             else:
                 with open(path, "rb") as f:
-                    archive = Archive(f.read())
+                    archive = InMemoryArchive(f.read())
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
             return
@@ -592,14 +663,30 @@ class MainWindow(QMainWindow):
             )
 
     def _new(self):
-        self.archive = (
-            LargeArchive.empty(tempfile.NamedTemporaryFile().name)
-            if self.is_using_large_archive()
-            else Archive.empty()
+        if not self.close_archive():
+            return
+
+        formats = ["BIG4 (for BFME games)", "BIGF (for C&C Generals)"]
+        item, ok = QInputDialog.getItem(
+            self, "New Archive", "Select archive format:", formats, 0, False
         )
+        if not ok:
+            self.close_archive()
+            return
+
+        header = b"BIGF" if "BIGF" in item else b"BIG4"
+
+        archive_class = InDiskArchive if self.is_using_large_archive() else InMemoryArchive
+        if self.is_using_large_archive():
+            temp_path = tempfile.NamedTemporaryFile(delete=False).name
+            self.archive = archive_class.empty(header, temp_path)
+        else:
+            self.archive = archive_class.empty()
+
         self.path = None
-        self.listwidget.update_list(True)
         self.update_archive_name()
+        self.listwidget.update_list(True)
+        self.update_ui_state()
 
     def _remove_file_tab(self, index):
         self.tabs.remove_tab(index)
@@ -668,7 +755,11 @@ class MainWindow(QMainWindow):
             "settings/large_archive", int(self.large_archive_action.isChecked())
         )
         self.settings.sync()
-        QMessageBox.information(self, "Large Archive Setting Changed", f"The large archive settings has been {'enabled' if self.large_archive_action.isChecked() else 'disabled'}, please restart FinalBIGv2 to apply the change.")
+        QMessageBox.information(
+            self,
+            "Large Archive Setting Changed",
+            f"The large archive settings has been {'enabled' if self.large_archive_action.isChecked() else 'disabled'}, please restart FinalBIGv2 to apply the change.",
+        )
 
     def toggle_dark_mode(self):
         is_checked = self.dark_mode_action.isChecked()
@@ -708,7 +799,9 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Dump Generated", "File list dump has been created")
 
     def merge_archives(self):
-        files = QFileDialog.getOpenFileNames(self, "Select an archive to merge", filter="*.big")[0]
+        files = QFileDialog.getOpenFileNames(
+            self, "Select an archive to merge", filter="Big files (*.big);;All files (*)"
+        )[0]
 
         if not files:
             return
@@ -722,10 +815,10 @@ class MainWindow(QMainWindow):
 
     def _merge_archives(self, path):
         if self.is_using_large_archive():
-            archive = LargeArchive(path)
+            archive = InDiskArchive(path)
         else:
             with open(path, "rb") as f:
-                archive = Archive(f.read())
+                archive = InMemoryArchive(f.read())
 
         skip_all = False
         files_added = []
@@ -738,7 +831,7 @@ class MainWindow(QMainWindow):
             self,
         )
         text_box.setStandardButtons(0)
-    
+
         text_box.show()
         QApplication.processEvents()
 
@@ -837,7 +930,9 @@ class MainWindow(QMainWindow):
         if not self.close_unsaved():
             return
 
-        file = QFileDialog.getOpenFileName(self, "Open file", "", "BIG files (*.big)")[0]
+        file = QFileDialog.getOpenFileName(
+            self, "Open file", "", "Big files (*.big);;All files (*)"
+        )[0]
         if not file:
             return
 
@@ -1105,6 +1200,9 @@ class MainWindow(QMainWindow):
         self._remove_file_tab(index)
 
     def close_unsaved(self):
+        if not self.archive:
+            return True
+
         unsaved_tabs = any(is_unsaved(self.tabs.tabText(i)) for i in range(self.tabs.count()))
         if self.archive.modified_entries or unsaved_tabs:
             ret = QMessageBox.question(
@@ -1133,7 +1231,8 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MainWindow()
 
-    app.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
+    if os.path.exists(os.path.join(basedir, "icon.ico")):
+        app.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
 
     w.show()
     sys.exit(app.exec())
