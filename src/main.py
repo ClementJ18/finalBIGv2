@@ -6,7 +6,7 @@ import tempfile
 import traceback
 from typing import List
 
-from pyBIG import InMemoryArchive, InDiskArchive, utils
+from pyBIG import InMemoryArchive, InDiskArchive, utils, base_archive
 from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
 from PyQt6.QtGui import QKeySequence, QShortcut, QIcon, QAction
 from PyQt6.QtWidgets import (
@@ -67,11 +67,10 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 sys.excepthook = handle_exception
 
 
-# fix this to use generic functions to work with large archive
 class ArchiveSearchThread(QThread):
     matched = pyqtSignal(tuple)
 
-    def __init__(self, parent, search, encoding, archive: InMemoryArchive, regex) -> None:
+    def __init__(self, parent, search, encoding, archive: base_archive.BaseArchive, regex) -> None:
         super().__init__(parent)
 
         self.search = search
@@ -83,8 +82,7 @@ class ArchiveSearchThread(QThread):
         matches = []
         self.archive.repack()
 
-        self.archive.archive.seek(0)
-        buffer = self.archive.archive.read().decode(self.encoding)
+        buffer = self.archive.bytes().decode(self.encoding)
         indexes = {
             match.start()
             for match in re.finditer(self.search if self.regex else re.escape(self.search), buffer)
