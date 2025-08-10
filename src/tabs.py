@@ -121,6 +121,9 @@ class TextTab(GenericTab):
 
         self.search = QComboBox(self)
         self.search.setEditable(True)
+        completer = self.search.completer()
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
+        self.search.setCompleter(completer)
         search_layout.addWidget(self.search, stretch=5)
 
         self.search_button = QPushButton(self)

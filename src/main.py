@@ -7,7 +7,7 @@ import traceback
 from typing import List
 
 from pyBIG import InMemoryArchive, InDiskArchive, utils, base_archive
-from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QThread, pyqtSignal, QEvent
 from PyQt6.QtGui import QKeySequence, QShortcut, QIcon, QAction
 from PyQt6.QtWidgets import (
     QMenu,
@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QCheckBox,
+    QMenuBar,
 )
 import qdarktheme
 
@@ -61,7 +62,7 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     ret = errorbox.exec()
 
     if ret == 0:
-        app.clipboard().setText(tb)
+        QApplication.instance().clipboard().setText(tb)
 
 
 sys.excepthook = handle_exception
@@ -282,6 +283,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.base_name = "FinalBIG v2"
+        self.lock_exceptions = []
         self.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
 
         self.search_archive_regex_bool = False
@@ -319,6 +321,9 @@ class MainWindow(QMainWindow):
 
         self.search = QComboBox(self)
         self.search.setEditable(True)
+        completer = self.search.completer()
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
+        self.search.setCompleter(completer)
         search_layout.addWidget(self.search, stretch=5)
 
         self.search_button = QPushButton("Filter file list", self)
@@ -380,7 +385,7 @@ class MainWindow(QMainWindow):
             self.listwidget.update_list(True)
 
         self.update_archive_name("No Archive Open")
-        self.update_ui_state()
+        self.lock_ui(True)
 
         return True
 
@@ -388,15 +393,22 @@ class MainWindow(QMainWindow):
         for i in reversed(range(self.tabs.count())):
             self._remove_file_tab(i)
 
-    def update_ui_state(self):
-        is_archive_open = self.archive is not None
-        if hasattr(self, "save_action"):
-            for action in [self.close_action, self.save_action, self.save_as_action]:
-                action.setEnabled(is_archive_open)
-            for name in ["&Edit", "&Tools"]:
-                menu = self.menuBar().findChild(QMenu, name)
-                if menu:
-                    menu.setEnabled(is_archive_open)
+    def lock_ui(self, locked: bool):
+        """Disable or enable all widgets & actions except the exceptions."""
+        # Lock all actions
+        for action in self.findChildren(QAction):
+            if action.menu() is not None:
+                continue
+
+            if action not in self.lock_exceptions:
+                action.setEnabled(not locked)
+
+        # Lock all widgets (including central widget)
+        for widget in self.findChildren(QWidget):
+            if isinstance(widget, (QMenuBar, QMenu)):
+                continue
+
+            widget.setEnabled(not locked)
 
     def _add_to_recent_files(self, path):
         if path in self.recent_files:
@@ -414,6 +426,7 @@ class MainWindow(QMainWindow):
             return
         for path in self.recent_files:
             action = self.recent_menu.addAction(os.path.basename(path), self._open_recent_file)
+            self.lock_exceptions.append(action)
             action.setData(path)
             action.setToolTip(path)
 
@@ -485,8 +498,9 @@ class MainWindow(QMainWindow):
     def create_menu(self):
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
-        file_menu.addAction("New", self.new)
-        file_menu.addAction("Open", self.open)
+        self.lock_exceptions.append(file_menu.addAction("New", self.new))
+        self.lock_exceptions.append(file_menu.addAction("Open", self.open))
+        file_menu.addAction("Close", self.close_archive)
         file_menu.addAction("Save", self.save)
         file_menu.addAction("Save as...", self.save_as)
         self.recent_menu = QMenu("Open Recent", self)
@@ -587,6 +601,16 @@ class MainWindow(QMainWindow):
         self.settings.setValue("settings/external", int(value))
         self.settings.sync()
 
+    @property
+    def last_dir(self):
+        return self.settings.value("settings/last_dir", os.path.expanduser("~"))
+    
+    @last_dir.setter
+    def last_dir(self, value):
+        self.settings.setValue("settings/last_dir", value)
+        self.settings.sync()
+        
+
     def is_using_large_archive(self):
         return str_to_bool(self.settings.value("settings/large_archive", "0"))
 
@@ -606,11 +630,11 @@ class MainWindow(QMainWindow):
     def _save(self, path):
         if path is None:
             path = QFileDialog.getSaveFileName(
-                self, "Save archive", "", "Big files (*.big);;All files (*)"
+                self, "Save archive", self.last_dir, "Big files (*.big);;All files (*)"
             )[0]
 
         if not path:
-            return
+            return False
 
         for index in range(self.tabs.count()):
             if is_unsaved(self.tabs.tabText(index)):
@@ -625,15 +649,19 @@ class MainWindow(QMainWindow):
                 "File Size Error",
                 "File has reached maximum size, the BIG format only supports up to 4.3GB per archive. Please remove some files and try saving again.",
             )
+            return False
         except PermissionError:
             QMessageBox.critical(
                 self,
                 "Failed",
                 "Could not save due to missing permissions. Save somewhere this application has access and restart the application as admin.",
             )
+            return False
 
         self.path = path
+        self.last_dir = os.path.dirname(path)
         self.update_archive_name()
+        return True
 
     def _open(self, path):
         try:
@@ -649,16 +677,9 @@ class MainWindow(QMainWindow):
         self.archive = archive
         self.path = path
         self.update_archive_name()
+        self._add_to_recent_files(path)
         self.listwidget.update_list(True)
-
-        try:
-            self.archive.save(self.path)
-        except PermissionError:
-            QMessageBox.warning(
-                self,
-                "Warning",
-                "The file you loaded is write-protected. You will not be able to save any changes. Copy this file to another directory and open it or relaunch FinalBIGv2 as admin if you are planning to modify it.",
-            )
+        self.lock_ui(False)
 
     def _new(self):
         if not self.close_archive():
@@ -672,19 +693,17 @@ class MainWindow(QMainWindow):
             self.close_archive()
             return
 
-        header = b"BIGF" if "BIGF" in item else b"BIG4"
-
-        archive_class = InDiskArchive if self.is_using_large_archive() else InMemoryArchive
+        header = "BIGF" if "BIGF" in item else "BIG4"
         if self.is_using_large_archive():
             temp_path = tempfile.NamedTemporaryFile(delete=False).name
-            self.archive = archive_class.empty(header, temp_path)
+            self.archive = InDiskArchive.empty(header, file_path=temp_path)
         else:
-            self.archive = archive_class.empty()
+            self.archive = InMemoryArchive.empty(header)
 
         self.path = None
         self.update_archive_name()
         self.listwidget.update_list(True)
-        self.update_ui_state()
+        self.lock_ui(False)
 
     def _remove_file_tab(self, index):
         self.tabs.remove_tab(index)
@@ -778,7 +797,7 @@ class MainWindow(QMainWindow):
         self.external = is_checked
 
     def dump_list(self, filtered):
-        file = QFileDialog.getSaveFileName(self, "Save dump")[0]
+        file = QFileDialog.getSaveFileName(self, "Save dump", self.last_dir)[0]
         if not file:
             return
 
@@ -794,11 +813,12 @@ class MainWindow(QMainWindow):
         with open(file, "w") as f:
             f.write("\n".join(file_list))
 
+        self.last_dir = os.path.dirname(file)
         QMessageBox.information(self, "Dump Generated", "File list dump has been created")
 
     def merge_archives(self):
         files = QFileDialog.getOpenFileNames(
-            self, "Select an archive to merge", filter="Big files (*.big);;All files (*)"
+            self, "Select an archive to merge", self.last_dir, filter="Big files (*.big);;All files (*)"
         )[0]
 
         if not files:
@@ -809,6 +829,7 @@ class MainWindow(QMainWindow):
         for file in files:
             files_added.extend(self._merge_archives(file))
 
+        self.last_dir = os.path.dirname(files[0])
         self.listwidget.add_files(files_added)
 
     def _merge_archives(self, path):
@@ -929,15 +950,16 @@ class MainWindow(QMainWindow):
             return
 
         file = QFileDialog.getOpenFileName(
-            self, "Open file", "", "Big files (*.big);;All files (*)"
+            self, "Open file", self.last_dir, "Big files (*.big);;All files (*)"
         )[0]
         if not file:
             return
 
+        self.last_dir = os.path.dirname(file)
         self._open(file)
 
     def save(self):
-        self._save(self.path)
+        return self._save(self.path)
 
     def save_as(self):
         self._save(None)
@@ -959,17 +981,19 @@ class MainWindow(QMainWindow):
             widget.search_file()
 
     def add_file(self):
-        file = QFileDialog.getOpenFileName(self, "Add file")[0]
+        file = QFileDialog.getOpenFileName(self, "Add file", self.last_dir)[0]
         if not file:
             return
 
+        self.last_dir = os.path.dirname(file)
         self.listwidget.active_list.add_file(file)
 
     def add_directory(self):
-        path = QFileDialog.getExistingDirectory(self, "Add directory")
+        path = QFileDialog.getExistingDirectory(self, "Add directory", self.last_dir)
         if not path:
             return
 
+        self.last_dir = path
         self.listwidget.active_list.add_folder(path)
 
     def new_file(self):
@@ -979,20 +1003,26 @@ class MainWindow(QMainWindow):
         search = self.search.currentText()
         invert = self.invert_box.isChecked()
         re_filter = self.re_filter_box.isChecked()
+        use_regex = self.regex_filter_box.isChecked()
+        active_list = self.listwidget.active_list
 
-        for x in range(self.listwidget.active_list.count()):
-            item = self.listwidget.active_list.item(x)
+        for x in range(active_list.count()):
+            item = active_list.item(x)
             if item.isHidden() and re_filter:
                 continue
 
-            if search == "":
-                item.setHidden(False)
+            match = False
+            if use_regex:
+                try:
+                    if re.search(search, item.text(), re.IGNORECASE):
+                        match = True
+                except re.error:
+                    pass
             else:
-                hide = not fnmatch.fnmatchcase(item.text(), search)
-                if invert:
-                    hide = not hide
+                if fnmatch.fnmatch(item.text(), f"*{search}*"):
+                    match = True
 
-                item.setHidden(hide)
+            item.setHidden(not (match ^ invert) if search else False)
 
         if search == "":
             return
@@ -1090,34 +1120,38 @@ class MainWindow(QMainWindow):
         items = self.listwidget.active_list.selectedItems()
 
         if len(items) > 1:
-            path = QFileDialog.getExistingDirectory(self, "Extract filtered files to directory")
+            path = QFileDialog.getExistingDirectory(self, "Extract filtered files to directory", self.last_dir)
             if not path:
                 return
 
+            self.last_dir = path
             self.archive.extract(path, files=[item.text() for item in items])
         else:
             item = items[0]
             name = item.text()
             file_name = name.split("\\")[-1]
-            path = QFileDialog.getSaveFileName(self, "Extract file", file_name)[0]
+            path = QFileDialog.getSaveFileName(self, "Extract file", os.path.join(self.last_dir, file_name))[0]
             if not path:
                 return
 
             with open(path, "wb") as f:
                 f.write(self.archive.read_file(name))
 
+            self.last_dir = os.path.dirname(path)
+
         QMessageBox.information(self, "Done", "File selection has been extracted")
 
     def extract_all(self):
-        path = QFileDialog.getExistingDirectory(self, "Extract all files to directory")
+        path = QFileDialog.getExistingDirectory(self, "Extract all files to directory", self.last_dir)
         if not path:
             return
 
         self.archive.extract(path)
+        self.last_dir = path
         QMessageBox.information(self, "Done", "All files have been extracted")
 
     def extract_filtered(self):
-        path = QFileDialog.getExistingDirectory(self, "Extract filtered files to directory")
+        path = QFileDialog.getExistingDirectory(self, "Extract filtered files to directory", self.last_dir)
         if not path:
             return
 
@@ -1128,6 +1162,7 @@ class MainWindow(QMainWindow):
         ]
 
         self.archive.extract(path, files=files)
+        self.last_dir = path
         QMessageBox.information(self, "Done", "Filtered files have been extracted")
 
     def file_double_clicked(self, _):
@@ -1188,12 +1223,15 @@ class MainWindow(QMainWindow):
             ret = QMessageBox.question(
                 self,
                 "Close unsaved?",
-                "There is unsaved work, are you sure you want to close?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
+                "There is unsaved work, do you want to save before closing?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
             )
-            if ret == QMessageBox.StandardButton.No:
+            if ret == QMessageBox.StandardButton.Cancel:
                 return
+            
+            if ret == QMessageBox.StandardButton.Yes:
+                self.tabs.widget(index).save()
 
         self._remove_file_tab(index)
 
@@ -1206,17 +1244,31 @@ class MainWindow(QMainWindow):
             ret = QMessageBox.question(
                 self,
                 "Close unsaved?",
-                "There is unsaved work, are you sure you want to close?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
+                "There is unsaved work, would you like to save it before closing?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
             )
-            if ret == QMessageBox.StandardButton.No:
+            if ret == QMessageBox.StandardButton.Cancel:
+                return False
+            
+            if ret == QMessageBox.StandardButton.Yes:
+                save_ret = self.save()
+
+            if not save_ret:
                 return False
 
         for t in range(self.tabs.count()):
             self._remove_file_tab(t)
 
         return True
+    
+    def eventFilter(self, obj, event):
+        if obj is self.tabs.tabBar() and event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.MiddleButton:
+            index = obj.tabAt(event.pos())
+            if index != -1:
+                self.close_tab(index)
+                return True
+        return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
         if self.close_unsaved():
