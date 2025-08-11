@@ -107,8 +107,6 @@ class ArchiveSearchThread(QThread):
 class FileList(QListWidget):
     def __init__(self, parent):
         super().__init__(parent)
-        self.setAcceptDrops(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.context_menu)
@@ -125,30 +123,6 @@ class FileList(QListWidget):
         menu.addAction("Copy file name", self.main.copy_name)
 
         menu.exec(global_position)
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dragMoveEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event):
-        md = event.mimeData()
-        if md.hasUrls():
-            for url in md.urls():
-                local_file = url.toLocalFile()
-                if os.path.isfile(local_file):
-                    self.add_file(local_file)
-                else:
-                    self.add_folder(local_file)
-
-            event.acceptProposedAction()
 
     def _add_file(self, url, name, blank=False, skip_all=False):
         ret = None
@@ -215,10 +189,10 @@ class FileList(QListWidget):
         self.main.listwidget.add_files(files_to_add)
 
     def update_list(self):
+        self.clear()
         if self.main.archive is None:
             return
 
-        self.clear()
         self.addItems(self.main.archive.file_list())
 
         self.main.filter_list()
@@ -285,6 +259,7 @@ class MainWindow(QMainWindow):
         self.base_name = "FinalBIG v2"
         self.lock_exceptions = []
         self.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
+        self.setAcceptDrops(True)
 
         self.search_archive_regex_bool = False
         self.tab_current_index = 0
@@ -373,6 +348,33 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
         self.showMaximized()
 
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        md = event.mimeData()
+        if md.hasUrls():
+            for url in md.urls():
+                local_file = url.toLocalFile()
+                if local_file.endswith(".big"):
+                    return self._open(local_file)
+
+                if os.path.isfile(local_file):
+                    self.listwidget.active_list.add_file(local_file)
+                else:
+                    self.listwidget.active_list.add_folder(local_file)
+
+            event.acceptProposedAction()
+
     def close_archive(self):
         if not self.close_unsaved():
             return False
@@ -425,7 +427,7 @@ class MainWindow(QMainWindow):
             action.setEnabled(False)
             return
         for path in self.recent_files:
-            action = self.recent_menu.addAction(os.path.basename(path), self._open_recent_file)
+            action = self.recent_menu.addAction(path, self._open_recent_file)
             self.lock_exceptions.append(action)
             action.setData(path)
             action.setToolTip(path)
@@ -433,7 +435,18 @@ class MainWindow(QMainWindow):
     def _open_recent_file(self):
         action = self.sender()
         if action:
-            self._open(action.data())
+            path = action.data()
+            try:
+                success = self._open(path)  # Should return True/False or raise
+            except Exception:
+                success = False
+
+            if not success:
+                # Remove from recent files list
+                if path in self.recent_files:
+                    self.recent_files.remove(path)
+                    self.settings.setValue("history/recent_files", self.recent_files)
+                    self._update_recent_files_menu()
 
     def create_shortcuts(self):
         self.shorcuts = [
