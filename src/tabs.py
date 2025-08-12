@@ -9,7 +9,7 @@ import webbrowser
 from PIL import Image
 from PIL.ImageQt import ImageQt
 from pyBIG.base_archive import BaseArchive
-from PyQt6.QtCore import QUrl, Qt, QTemporaryFile
+from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtWidgets import (
@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QSlider,
 )
+from pydub import AudioSegment
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -317,26 +318,33 @@ class SoundTab(GenericTab):
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
-        self.temp_audio_file = None  # Keep alive for full session
+        self.temp_audio_file_path = None
 
     def generate_layout(self):
         layout = QVBoxLayout()
 
         try:
-            # Create a temporary file that persists for the object's lifetime
-            self.temp_audio_file = QTemporaryFile(f"dummy{self.file_type}")
-            self.temp_audio_file.setAutoRemove(False)  # Keep until manual cleanup
-            if not self.temp_audio_file.open():
-                raise RuntimeError("Could not open temporary audio file.")
+            # Default: just write data to a temp file
+            temp_file_path = None
+            if self.file_type == ".wav":
+                # Inspect WAV file to check if it's mono PCM
+                audio: AudioSegment = AudioSegment.from_file(io.BytesIO(self.data), format="wav")
+                if audio.channels == 1:
+                    # Force stereo, 16-bit PCM, 44.1 kHz
+                    audio = audio.set_channels(2).set_frame_rate(44100).set_sample_width(2)
 
-            # Write data and rewind to start
-            self.temp_audio_file.write(self.data)
-            self.temp_audio_file.flush()
-            self.temp_audio_file.seek(0)
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+                        audio.export(f, format="wav")
+                        temp_file_path = f.name
 
-            # Set media source from the temp file path
-            self.player.setSource(QUrl.fromLocalFile(self.temp_audio_file.fileName()))
+            if not temp_file_path:
+                # No conversion needed — just save raw data
+                with tempfile.NamedTemporaryFile(delete=False, suffix=self.file_type) as f:
+                    f.write(self.data)
+                    temp_file_path = f.name
 
+            self.temp_audio_file_path = temp_file_path
+            self.player.setSource(QUrl.fromLocalFile(temp_file_path))
         except Exception as e:
             error_box = QTextEdit(self)
             error_box.setReadOnly(True)
@@ -377,10 +385,8 @@ class SoundTab(GenericTab):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.pause()
         else:
-            # If playback reached the end, reload the source to ensure replay works
-            if self.player.position() >= self.player.duration() and self.temp_audio_file:
-                self.temp_audio_file.seek(0)  # Ensure file pointer at start
-                self.player.setSource(QUrl.fromLocalFile(self.temp_audio_file.fileName()))
+            self.player.stop()
+            self.player.setSource(QUrl.fromLocalFile(self.temp_audio_file_path))
             self.player.play()
 
     def update_button_state(self, state):
@@ -406,11 +412,9 @@ class SoundTab(GenericTab):
     def deleteLater(self):
         self.player.stop()
         self.player.setSource(QUrl())
-        if self.temp_audio_file:
-            path = self.temp_audio_file.fileName()
-            self.temp_audio_file.close()
+        if hasattr(self, "temp_audio_file_path") and os.path.exists(self.temp_audio_file_path):
             try:
-                os.unlink(path)
+                os.unlink(self.temp_audio_file_path)
             except OSError:
                 pass
         super().deleteLater()
