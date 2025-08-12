@@ -6,7 +6,7 @@ import tempfile
 import traceback
 from typing import cast
 
-from pyBIG import InMemoryArchive, InDiskArchive, utils
+from pyBIG import InMemoryArchive, InDiskArchive, base_archive
 from PyQt6.QtCore import Qt, QSettings, QEvent
 from PyQt6.QtGui import (
     QCloseEvent,
@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
         self.path = None
 
         self.settings = QSettings("Necro inc.", "FinalBIGv2")
-        self.recent_files: list[str] = self.settings.value("history/recent_files", [], type=list)
+        self.recent_files: list[str] = self.validate_recent_files()
 
         if self.dark_mode:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
@@ -168,6 +168,16 @@ class MainWindow(QMainWindow):
         widget.setLayout(layout)
         self.setCentralWidget(widget)
         self.showMaximized()
+
+    def validate_recent_files(self):
+        recent_files = self.settings.value("history/recent_files", [], type=list)
+        real_files = [file for file in recent_files if os.path.exists(file)]
+
+        if recent_files != real_files:
+            self.settings.setValue("history/recent_files", real_files)
+            self.settings.sync()
+
+        return real_files
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
@@ -476,7 +486,7 @@ class MainWindow(QMainWindow):
         try:
             self.archive.save(path)
             QMessageBox.information(self, "Done", "Archive has been saved")
-        except utils.MaxSizeError:
+        except base_archive.MaxSizeError:
             QMessageBox.warning(
                 self,
                 "File Size Error",
@@ -513,6 +523,8 @@ class MainWindow(QMainWindow):
         self._add_to_recent_files(path)
         self.listwidget.update_list(True)
         self.lock_ui(False)
+
+        return True
 
     def _new(self):
         if not self.close_archive():
@@ -728,7 +740,7 @@ class MainWindow(QMainWindow):
 
                 try:
                     self.archive.save(self.path)
-                except utils.MaxSizeError:
+                except base_archive.MaxSizeError:
                     QMessageBox.warning(
                         self,
                         "File Size Error",
@@ -1104,10 +1116,8 @@ class MainWindow(QMainWindow):
                 return False
 
             if ret == QMessageBox.StandardButton.Yes:
-                save_ret = self.save()
-
-            if not save_ret:
-                return False
+                if not self.save():
+                    return False
 
         for t in range(self.tabs.count()):
             self._remove_file_tab(t)
