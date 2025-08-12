@@ -8,10 +8,10 @@ import webbrowser
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
+import audio_metadata
 from pyBIG.base_archive import BaseArchive
-from PyQt6.QtCore import QUrl, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,9 +23,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QScrollArea,
-    QSlider,
 )
-from pydub import AudioSegment
+import playsound
+import tbm_utils
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -313,111 +313,35 @@ class CustomHeroTab(GenericTab):
 
 
 class SoundTab(GenericTab):
-    def __init__(self, main: QMainWindow, archive: BaseArchive, name):
-        super().__init__(main, archive, name)
-        self.player = QMediaPlayer()
-        self.audio_output = QAudioOutput()
-        self.player.setAudioOutput(self.audio_output)
-        self.temp_audio_file_path = None
-
     def generate_layout(self):
         layout = QVBoxLayout()
 
-        try:
-            # Default: just write data to a temp file
-            temp_file_path = None
-            if self.file_type == ".wav":
-                # Inspect WAV file to check if it's mono PCM
-                audio: AudioSegment = AudioSegment.from_file(io.BytesIO(self.data), format="wav")
-                if audio.channels == 1:
-                    # Force stereo, 16-bit PCM, 44.1 kHz
-                    audio = audio.set_channels(2).set_frame_rate(44100).set_sample_width(2)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=self.file_type) as f:
+            f.write(self.data)
+            self.path = f.name
 
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-                        audio.export(f, format="wav")
-                        temp_file_path = f.name
+        play_button = QPushButton(self)
+        play_button.setText("Play")
+        play_button.clicked.connect(self.play_audio)
+        layout.addWidget(play_button)
 
-            if not temp_file_path:
-                # No conversion needed — just save raw data
-                with tempfile.NamedTemporaryFile(delete=False, suffix=self.file_type) as f:
-                    f.write(self.data)
-                    temp_file_path = f.name
+        metadata = audio_metadata.loads(self.data)
 
-            self.temp_audio_file_path = temp_file_path
-            self.player.setSource(QUrl.fromLocalFile(temp_file_path))
-        except Exception as e:
-            error_box = QTextEdit(self)
-            error_box.setReadOnly(True)
-            error_box.setText(f"Could not load audio:\n{e}")
-            layout.addWidget(error_box)
-            self.setLayout(layout)
-            return
-
-        # Controls
-        controls_layout = QHBoxLayout()
-        self.play_button = QPushButton("Play")
-        controls_layout.addWidget(self.play_button)
-        self.stop_button = QPushButton("Stop")
-        controls_layout.addWidget(self.stop_button)
-
-        # Progress bar
-        progress_layout = QHBoxLayout()
-        self.time_label = QLabel("00:00")
-        self.time_slider = QSlider(Qt.Orientation.Horizontal)
-        self.duration_label = QLabel("00:00")
-        progress_layout.addWidget(self.time_label)
-        progress_layout.addWidget(self.time_slider)
-        progress_layout.addWidget(self.duration_label)
-
-        layout.addLayout(controls_layout)
-        layout.addLayout(progress_layout)
-        self.setLayout(layout)
-
-        # Connections
-        self.play_button.clicked.connect(self.toggle_playback)
-        self.stop_button.clicked.connect(self.player.stop)
-        self.time_slider.sliderMoved.connect(self.set_position)
-        self.player.positionChanged.connect(self.update_slider_position)
-        self.player.durationChanged.connect(self.update_duration)
-        self.player.playbackStateChanged.connect(self.update_button_state)
-
-    def toggle_playback(self):
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.pause()
-        else:
-            self.player.stop()
-            self.player.setSource(QUrl.fromLocalFile(self.temp_audio_file_path))
-            self.player.play()
-
-    def update_button_state(self, state):
-        self.play_button.setText(
-            "Pause" if state == QMediaPlayer.PlaybackState.PlayingState else "Play"
+        data = QTextEdit(self)
+        data.setReadOnly(True)
+        data.setText(
+            f"""
+            File: {self.name}
+            Size: {tbm_utils.humanize_filesize(metadata.filesize)}
+            Duration: {tbm_utils.humanize_duration(metadata.streaminfo.duration)}
+            """
         )
 
-    def format_time(self, ms):
-        s = int(ms / 1000)
-        return f"{int(s / 60):02d}:{s % 60:02d}"
+        layout.addWidget(data)
+        self.setLayout(layout)
 
-    def update_duration(self, d):
-        self.time_slider.setRange(0, d)
-        self.duration_label.setText(self.format_time(d))
-
-    def update_slider_position(self, p):
-        self.time_slider.setValue(p)
-        self.time_label.setText(self.format_time(p))
-
-    def set_position(self, p):
-        self.player.setPosition(p)
-
-    def deleteLater(self):
-        self.player.stop()
-        self.player.setSource(QUrl())
-        if hasattr(self, "temp_audio_file_path") and os.path.exists(self.temp_audio_file_path):
-            try:
-                os.unlink(self.temp_audio_file_path)
-            except OSError:
-                pass
-        super().deleteLater()
+    def play_audio(self):
+        playsound.playsound(self.path, False)
 
 
 class SaveEventHandler(FileSystemEventHandler):

@@ -1,6 +1,5 @@
 audio-metadata==0.11.1
 Pillow==9.4.0
-https://github.com/jiaaro/pydub/archive/996cec42e9621701edb83354232b2c0ca0121560.tar.gz
 pyinstaller==5.7.0
 pyinstaller-hooks-contrib==2022.14
 PyQt6==6.4.0
@@ -14,3 +13,4 @@ pyBIG==0.6.4
 https://github.com/gorakhargosh/watchdog/archive/3140f52537f9bc801d1b812ed6ded3cb36695933.tar.gz
 pyqtdarktheme==2.1.0
 ruff==0.1.6
+playsound

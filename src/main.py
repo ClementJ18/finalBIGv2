@@ -517,7 +517,7 @@ class MainWindow(QMainWindow):
     def _new(self):
         if not self.close_archive():
             return
-        
+
         formats_map = {
             "BIG4 (for BFME games)": "BIG4",
             "BIGF (for C&C Generals)": "BIGF",
