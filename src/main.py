@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import (
 import qdarktheme
 
 from misc import ArchiveSearchThread, FileList, FileListTabs, TabWidget
-from tabs import GenericTab, get_tab_from_file_type
+from tabs import TextTab, get_tab_from_file_type
 from utils import (
     ABOUT_STRING,
     ENCODING_LIST,
@@ -637,7 +637,7 @@ class MainWindow(QMainWindow):
             qdarktheme.setup_theme("light", corner_shape="sharp")
 
         for x in range(self.tabs.count()):
-            widget = self.tabs.widget(x)
+            widget: TextTab = self.tabs.widget(x)
             if hasattr(widget, "text_widget"):
                 widget.text_widget.toggle_dark_mode(is_checked)
 
@@ -1033,7 +1033,7 @@ class MainWindow(QMainWindow):
                 self.tabs.setCurrentIndex(x)
                 break
         else:
-            tab: GenericTab = get_tab_from_file_type(name)(self, self.archive, name)
+            tab = get_tab_from_file_type(name)(self, self.archive, name)
 
             if self.external:
                 tab.open_externally()

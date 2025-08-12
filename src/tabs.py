@@ -4,6 +4,7 @@ import shutil
 import struct
 import tempfile
 import traceback
+from typing import Type
 import webbrowser
 
 from PIL import Image
@@ -426,7 +427,7 @@ TAB_TYPES = {
 }
 
 
-def get_tab_from_file_type(name: str) -> GenericTab:
+def get_tab_from_file_type(name: str) -> Type[GenericTab]:
     file_type = os.path.splitext(name)[1].lower()
 
     for key, value in TAB_TYPES.items():
