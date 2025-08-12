@@ -708,7 +708,7 @@ class MainWindow(QMainWindow):
 
         for index, file in enumerate(files):
             text_box.setText(
-                f"Processing archive: <b>{path}</b><br>File: ({index+1}/{length})<br>Processing: <b>{file}</b>"
+                f"Processing archive: <b>{path}</b><br>File: ({index + 1}/{length})<br>Processing: <b>{file}</b>"
             )
             QApplication.processEvents()
             if self.archive.file_exists(file):

@@ -6,8 +6,8 @@ from PyQt6.Qsci import QsciScintilla, QsciLexerLua, QsciLexerCustom, QsciLexerXM
 
 from keywords import KEYWORDS, BEHAVIORS, CODEBLOCKS, SINGLETONS
 
-KEYWORDS_PATTERN = re.compile(f'^({"|".join(KEYWORDS)})$')
-BEHAVIORS_PATTERN = re.compile(f'^({"|".join(BEHAVIORS)})$')
+KEYWORDS_PATTERN = re.compile(f"^({'|'.join(KEYWORDS)})$")
+BEHAVIORS_PATTERN = re.compile(f"^({'|'.join(BEHAVIORS)})$")
 
 
 class Commenter:
