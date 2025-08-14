@@ -1,19 +1,15 @@
-import os
 import re
 from typing import TYPE_CHECKING, List
 
 from PyQt6.QtCore import QThread, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
-    QInputDialog,
     QListWidget,
     QMenu,
-    QMessageBox,
     QTabWidget,
 )
 from pyBIG import base_archive
 
-from utils import normalize_name
 
 if TYPE_CHECKING:
     from main import MainWindow
@@ -75,70 +71,6 @@ class FileList(QListWidget):
 
         menu.exec(global_position)
 
-    def _add_file(self, url, name, blank=False, skip_all=False):
-        ret = None
-        if self.main.archive.file_exists(name):
-            if not skip_all:
-                ret = QMessageBox.question(
-                    self,
-                    "Overwrite file?",
-                    f"<b>{name}</b> already exists, overwrite?",
-                    QMessageBox.StandardButton.Yes
-                    | QMessageBox.StandardButton.No
-                    | QMessageBox.StandardButton.YesToAll,
-                    QMessageBox.StandardButton.No,
-                )
-                if ret == QMessageBox.StandardButton.No:
-                    return ret
-
-            self.main.archive.remove_file(name)
-
-        try:
-            if blank:
-                self.main.archive.add_file(name, b"")
-            else:
-                with open(url, "rb") as f:
-                    self.main.archive.add_file(name, f.read())
-        except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
-            return ret
-
-        return ret
-
-    def add_file(self, url, *, blank=False, ask_name=True):
-        name = normalize_name(url)
-        if ask_name:
-            name, ok = QInputDialog.getText(
-                self,
-                "Filename",
-                "Save the file under the following name:",
-                text=name,
-            )
-            if not ok or not name:
-                return False
-
-        ret = self._add_file(url, name, blank)
-        if ret != QMessageBox.StandardButton.No:
-            self.main.listwidget.add_files([name], ret is not None)
-
-    def add_folder(self, url):
-        skip_all = False
-        common_dir = os.path.dirname(url)
-        files_to_add = []
-        for root, _, files in os.walk(url):
-            for f in files:
-                full_path = os.path.join(root, f)
-                name = normalize_name(os.path.relpath(full_path, common_dir))
-                ret = self._add_file(full_path, name, blank=False, skip_all=skip_all)
-
-                if ret != QMessageBox.StandardButton.No:
-                    files_to_add.append(name)
-
-                if ret == QMessageBox.StandardButton.YesToAll:
-                    skip_all = True
-
-        self.main.listwidget.add_files(files_to_add)
-
     def update_list(self):
         self.clear()
         if self.main.archive is None:
@@ -182,7 +114,7 @@ class FileListTabs(TabWidget):
         for widget in to_update:
             widget.update_list()
 
-    def add_files(self, files, replace=False):
+    def add_files(self, files: List[str], replace=False):
         for widget in self.all_lists:
             items = [widget.item(x).text() for x in range(widget.count())]
             new_files = [file for file in files if file not in items]

@@ -4,7 +4,7 @@ import shutil
 import struct
 import tempfile
 import traceback
-from typing import Type
+from typing import Type, TYPE_CHECKING
 import webbrowser
 
 from PIL import Image
@@ -34,20 +34,23 @@ from cah import CustomHero
 from editor import Editor
 from utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
 
+if TYPE_CHECKING:
+    from main import MainWindow
+
 
 class GenericTab(QWidget):
-    def __init__(self, main: QMainWindow, archive: BaseArchive, name):
+    def __init__(self, main: "MainWindow", archive: BaseArchive, name: str):
         super().__init__(main)
 
         self.archive = archive
         self.main = main
 
         self.name = name
-        self.file_type = os.path.splitext(name)[1]
-        self.data = self.archive.read_file(name)
+        self.file_type: str = os.path.splitext(name)[1]
+        self.data: bytes = self.archive.read_file(name)
 
-        self.external = False
-        self.path = None
+        self.external: bool = False
+        self.path: str = None
 
     def generate_layout(self):
         layout = QHBoxLayout()
@@ -99,9 +102,9 @@ class GenericTab(QWidget):
 class TextTab(GenericTab):
     def generate_layout(self):
         layout = QVBoxLayout()
-        self.text_widget = Editor(self.name, self.main.dark_mode)
+        self.text_widget = Editor(self.name, self.main.settings.dark_mode)
 
-        string = decode_string(self.data, self.main.encoding)
+        string = decode_string(self.data, self.main.settings.encoding)
         self.text_widget.setText(string)
         self.text_widget.textChanged.connect(self.text_changed)
 
@@ -176,12 +179,12 @@ class TextTab(GenericTab):
 
     def save(self):
         if self.external:
-            with open(self.path, "r", encoding=self.main.encoding) as f:
+            with open(self.path, "r", encoding=self.main.settings.encoding) as f:
                 data = f.read()
         else:
             data = self.text_widget.text()
 
-        string = encode_string(data, self.main.encoding)
+        string = encode_string(data, self.main.settings.encoding)
         self.archive.edit_file(self.name, string)
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
 
@@ -288,7 +291,7 @@ class CustomHeroTab(GenericTab):
         layout = QHBoxLayout()
 
         try:
-            cah = CustomHero(self.data, self.main.encoding)
+            cah = CustomHero(self.data, self.main.settings.encoding)
 
             powers = "\n".join(
                 f"\t- Level {level + 1}: {power} (index: {index})"
