@@ -152,16 +152,19 @@ class MainWindow(QMainWindow, HasUiElements):
             action.setEnabled(False)
             return
         for path in recent_files:
-            action = self.recent_menu.addAction(path, lambda: self.open_recent_file(path))
+            action = self.recent_menu.addAction(path, self.open_recent_file)
             self.lock_exceptions.append(action)
             action.setData(path)
             action.setToolTip(path)
 
-    def open_recent_file(self, path: str):
-        try:
-            success = self._open(path)
-        except Exception:
-            success = False
+    def open_recent_file(self):
+        action = self.sender()
+        if action:
+            path = action.data()
+            try:
+                success = self._open(path)
+            except Exception:
+                success = False
 
         if not success:
             recent_files = self.settings.recent_files()
@@ -216,6 +219,7 @@ class MainWindow(QMainWindow, HasUiElements):
         self.path = path
         self.settings.last_dir = os.path.dirname(path)
         self.update_archive_name()
+        self.add_to_recent_files(path)
         return True
 
     def _open(self, path):

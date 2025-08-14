@@ -2,16 +2,20 @@ import io
 import os
 import shutil
 import struct
+import sys
 import tempfile
 import traceback
 from typing import Type, TYPE_CHECKING
+import vlc
 import webbrowser
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PyQt6.QtMultimediaWidgets import QVideoWidget
 import audio_metadata
 from pyBIG.base_archive import BaseArchive
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer, QUrl, Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -20,6 +24,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QMainWindow,
+    QSlider,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -347,6 +352,10 @@ class SoundTab(GenericTab):
     def play_audio(self):
         playsound.playsound(self.path, False)
 
+    def deleteLater(self) -> None:
+        shutil.rmtree(self.path, True)
+        return super().deleteLater()
+
 
 class SaveEventHandler(FileSystemEventHandler):
     def __init__(self, tab, name, tmp_name):
@@ -422,9 +431,81 @@ class MapTab(GenericTab):
         self.setLayout(layout)
 
 
+class VideoTab(GenericTab):
+    def generate_layout(self):
+        layout = QVBoxLayout()
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=self.file_type) as f:
+            f.write(self.data)
+            self.path = f.name
+
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        self.video_frame = QWidget()
+        layout.addWidget(self.video_frame)
+
+        # VLC player
+        self.instance: vlc.Instance = vlc.Instance()
+        self.player: vlc.MediaPlayer = self.instance.media_player_new()
+        self.media: vlc.Media = self.instance.media_new(self.path)
+        self.player.set_media(self.media)
+
+        # Embed the video in the PyQt widget
+        if sys.platform.startswith('win'):
+            self.player.set_hwnd(int(self.video_frame.winId()))
+        elif sys.platform.startswith('linux'):
+            self.player.set_xwindow(int(self.video_frame.winId()))
+        elif sys.platform.startswith('darwin'):
+            self.player.set_nsobject(int(self.video_frame.winId()))
+
+        # Playback buttons
+        button_layout = QHBoxLayout()
+        layout.addLayout(button_layout)
+
+        self.play_button = QPushButton("Play")
+        self.play_button.clicked.connect(self.player.play)
+        button_layout.addWidget(self.play_button)
+
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.clicked.connect(self.player.pause)
+        button_layout.addWidget(self.pause_button)
+
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.clicked.connect(self.player.stop)
+        button_layout.addWidget(self.stop_button)
+
+        # Playback slider
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.slider.setRange(0, 1000)
+        self.slider.sliderMoved.connect(self.set_position)
+        layout.addWidget(self.slider)
+
+        # Timer to update slider
+        self.timer = QTimer(self)
+        self.timer.setInterval(200)
+        self.timer.timeout.connect(self.update_slider)
+        self.timer.start()
+
+    def set_position(self, position):
+        # VLC expects a float between 0 and 1
+        self.player.set_position(position / 1000.0)
+
+    def update_slider(self):
+        if self.player.is_playing():
+            pos = int(self.player.get_position() * 1000)
+            self.slider.setValue(pos)
+
+    def deleteLater(self) -> None:
+        self.player.stop()
+        shutil.rmtree(self.path, True)
+        return super().deleteLater()
+
+
 TAB_TYPES = {
     (".bse", ".map"): MapTab,
     (".wav", ".mp3"): SoundTab,
+    (".mp4", ".m4v", ".avi", ".mkv", ".mov", ".flv", ".webm", ".ts", ".m2ts", ".ogv", ".wmv", ".3gp", ".3g2", ".asf", ".mxf"): VideoTab,
     (".cah",): CustomHeroTab,
     tuple(Image.registered_extensions().keys()): ImageTab,
 }
