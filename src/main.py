@@ -111,7 +111,9 @@ class MainWindow(QMainWindow, HasUiElements):
 
         self.archive = None
         self.path = None
-        self.close_all_tabs()
+        
+        for i in reversed(range(self.tabs.count())):
+            self.remove_file_tab(i)
 
         if hasattr(self, "listwidget"):
             self.listwidget.update_list(True)
@@ -119,11 +121,7 @@ class MainWindow(QMainWindow, HasUiElements):
         self.update_archive_name("No Archive Open")
         self.lock_ui(True)
 
-        return True
-
-    def close_all_tabs(self):
-        for i in reversed(range(self.tabs.count())):
-            self.remove_file_tab(i)
+        return True        
 
     def lock_ui(self, locked: bool):
         """Disable or enable all widgets & actions except the exceptions."""
@@ -154,26 +152,22 @@ class MainWindow(QMainWindow, HasUiElements):
             action.setEnabled(False)
             return
         for path in recent_files:
-            action = self.recent_menu.addAction(path, self.open_recent_file)
+            action = self.recent_menu.addAction(path, lambda: self.open_recent_file(path))
             self.lock_exceptions.append(action)
             action.setData(path)
             action.setToolTip(path)
 
-    def open_recent_file(self):
-        action = self.sender()
-        if action:
-            path = action.data()
-            try:
-                success = self._open(path)  # Should return True/False or raise
-            except Exception:
-                success = False
+    def open_recent_file(self, path: str):
+        try:
+            success = self._open(path)
+        except Exception:
+            success = False
 
-            if not success:
-                # Remove from recent files list
-                recent_files = self.settings.recent_files()
-                if path in recent_files:
-                    recent_files.remove(path)
-                    self.settings.save_recent_files(recent_files)
+        if not success:
+            recent_files = self.settings.recent_files()
+            if path in recent_files:
+                recent_files.remove(path)
+                self.settings.save_recent_files(recent_files)
 
     def is_file_selected(self):
         if not self.listwidget.active_list.selectedItems():
