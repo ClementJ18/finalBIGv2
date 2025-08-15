@@ -1,7 +1,14 @@
 import os
+from typing import TYPE_CHECKING
 from PyQt6.QtCore import QSettings
+from PyQt6.QtWidgets import QInputDialog, QMessageBox
+import qdarktheme
 
-from utils import RECENT_FILES_MAX
+from tabs import TextTab
+from utils import ENCODING_LIST, RECENT_FILES_MAX
+
+if TYPE_CHECKING:
+    from main import MainWindow
 
 
 def str_to_bool(value) -> bool:
@@ -14,8 +21,10 @@ def str_to_bool(value) -> bool:
 
 
 class Settings:
-    def __init__(self, org: str = "Necro inc.", app: str = "FinalBIGv2"):
+    def __init__(self, main: "MainWindow", org: str = "Necro inc.", app: str = "FinalBIGv2"):
         self._settings = QSettings(org, app)
+        self.main = main
+        self.search_archive_regex_bool = False
 
     def get_str(self, key: str, default: str = "") -> str:
         return str(self._settings.value(key, default))
@@ -92,3 +101,49 @@ class Settings:
         recent_files.insert(0, path)
         del recent_files[RECENT_FILES_MAX:]
         self.save_recent_files(recent_files)
+
+    def set_encoding(self):
+        name, ok = QInputDialog.getItem(
+            self,
+            "Encoding",
+            "Select an encoding",
+            ENCODING_LIST,
+            ENCODING_LIST.index(self.encoding),
+            False,
+        )
+        if not ok:
+            return
+
+        self.encoding = name
+
+    def toggle_search_archive_regex(self):
+        self.search_archive_regex_bool = not self.search_archive_regex_bool
+
+    def toggle_preview(self):
+        self.preview_enabled = self.main.preview_action.isChecked()
+
+    def toggle_large_archives(self):
+        is_checked = self.main.large_archive_action.isChecked()
+        self.large_archive = is_checked
+        QMessageBox.information(
+            self.main,
+            "Large Archive Setting Changed",
+            f"The large archive settings has been {'enabled' if is_checked else 'disabled'}, please restart FinalBIGv2 to apply the change.",
+        )
+
+    def toggle_dark_mode(self):
+        is_checked = self.main.dark_mode_action.isChecked()
+        self.dark_mode = is_checked
+
+        if is_checked:
+            qdarktheme.setup_theme("dark", corner_shape="sharp")
+        else:
+            qdarktheme.setup_theme("light", corner_shape="sharp")
+
+        for x in range(self.main.tabs.count()):
+            widget: TextTab = self.main.tabs.widget(x)
+            if hasattr(widget, "text_widget"):
+                widget.text_widget.toggle_dark_mode(is_checked)
+
+    def toggle_external(self):
+        self.external = self.main.use_external_action.isChecked()

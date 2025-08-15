@@ -18,7 +18,14 @@ if TYPE_CHECKING:
 class ArchiveSearchThread(QThread):
     matched = pyqtSignal(tuple)
 
-    def __init__(self, parent, search, encoding, archive: base_archive.BaseArchive, regex) -> None:
+    def __init__(
+        self,
+        parent: "MainWindow",
+        search: str,
+        encoding: str,
+        archive: base_archive.BaseArchive,
+        regex: bool,
+    ) -> None:
         super().__init__(parent)
 
         self.search = search
@@ -98,7 +105,7 @@ class FileListTabs(TabWidget):
     @property
     def all_lists(self) -> List[FileList]:
         return [
-            self.widget(i) for i in range(self.count() - 1) if isinstance(self.widget(1), FileList)
+            self.widget(i) for i in range(self.count() - 1) if isinstance(self.widget(i), FileList)
         ]
 
     @property
@@ -106,7 +113,7 @@ class FileListTabs(TabWidget):
         return [
             self.widget(i)
             for i in range(self.count() - 1)
-            if i != self.currentIndex() and isinstance(self.widget(1), FileList)
+            if i != self.currentIndex() and isinstance(self.widget(i), FileList)
         ]
 
     def update_list(self, all=False):
@@ -114,7 +121,7 @@ class FileListTabs(TabWidget):
         for widget in to_update:
             widget.update_list()
 
-    def add_files(self, files: List[str], replace=False):
+    def add_files(self, files: List[str]):
         for widget in self.all_lists:
             items = [widget.item(x).text() for x in range(widget.count())]
             new_files = [file for file in files if file not in items]

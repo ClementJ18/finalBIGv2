@@ -1,6 +1,4 @@
-import fnmatch
 import os
-import re
 import sys
 import tempfile
 import traceback
@@ -30,15 +28,14 @@ from PyQt6.QtWidgets import (
 )
 import qdarktheme
 
-from misc import ArchiveSearchThread, FileList
+from misc import FileList
+from search import SearchManager
 from settings import Settings
-from tabs import TextTab, get_tab_from_file_type
+from tabs import get_tab_from_file_type
 from ui import HasUiElements, generate_ui
 from utils import (
     ABOUT_STRING,
-    ENCODING_LIST,
     HELP_STRING,
-    SEARCH_HISTORY_MAX,
     is_preview,
     is_unsaved,
     normalize_name,
@@ -76,19 +73,18 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 sys.excepthook = handle_exception
 
 
-class MainWindow(QMainWindow, HasUiElements):
+class MainWindow(QMainWindow, HasUiElements, SearchManager):
     def __init__(self):
         super().__init__()
         self.base_name = "FinalBIG v2"
         self.lock_exceptions = []
 
-        self.search_archive_regex_bool = False
         self.tab_current_index = 0
 
         self.archive = None
         self.path = None
 
-        self.settings = Settings()
+        self.settings = Settings(self)
         if self.settings.dark_mode:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
         else:
@@ -111,7 +107,7 @@ class MainWindow(QMainWindow, HasUiElements):
 
         self.archive = None
         self.path = None
-        
+
         for i in reversed(range(self.tabs.count())):
             self.remove_file_tab(i)
 
@@ -121,7 +117,7 @@ class MainWindow(QMainWindow, HasUiElements):
         self.update_archive_name("No Archive Open")
         self.lock_ui(True)
 
-        return True        
+        return True
 
     def lock_ui(self, locked: bool):
         """Disable or enable all widgets & actions except the exceptions."""
@@ -314,62 +310,17 @@ class MainWindow(QMainWindow, HasUiElements):
     def show_about(self):
         QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))
 
-    def set_encoding(self):
-        name, ok = QInputDialog.getItem(
-            self,
-            "Encoding",
-            "Select an encoding",
-            ENCODING_LIST,
-            ENCODING_LIST.index(self.settings.encoding),
-            False,
-        )
-        if not ok:
-            return
-
-        self.settings.encoding = name
-
-    def toggle_search_archive_regex(self):
-        self.search_archive_regex_bool = not self.search_archive_regex_bool
-
-    def toggle_preview(self):
-        self.settings.preview_enabled = self.preview_action.isChecked()
-
-    def toggle_large_archives(self):
-        is_checked = self.large_archive_action.isChecked()
-        self.settings.large_archive = is_checked
-        QMessageBox.information(
-            self,
-            "Large Archive Setting Changed",
-            f"The large archive settings has been {'enabled' if is_checked else 'disabled'}, please restart FinalBIGv2 to apply the change.",
-        )
-
-    def toggle_dark_mode(self):
-        is_checked = self.dark_mode_action.isChecked()
-        self.settings.dark_mode = is_checked
-
-        if is_checked:
-            qdarktheme.setup_theme("dark", corner_shape="sharp")
-        else:
-            qdarktheme.setup_theme("light", corner_shape="sharp")
-
-        for x in range(self.tabs.count()):
-            widget: TextTab = self.tabs.widget(x)
-            if hasattr(widget, "text_widget"):
-                widget.text_widget.toggle_dark_mode(is_checked)
-
-    def toggle_external(self):
-        self.settings.external = self.use_external_action.isChecked()
-
     def dump_list(self, filtered):
         file = QFileDialog.getSaveFileName(self, "Save dump", self.settings.last_dir)[0]
         if not file:
             return
 
         if filtered:
+            active_list = self.listwidget.active_list
             file_list = (
-                self.listwidget.active_list.item(x).text()
-                for x in range(self.listwidget.active_list.count())
-                if not self.listwidget.active_list.item(x).isHidden()
+                active_list.item(x).text()
+                for x in range(active_list.count())
+                if not active_list.item(x).isHidden()
             )
         else:
             file_list = self.archive.file_list()
@@ -468,46 +419,6 @@ class MainWindow(QMainWindow, HasUiElements):
 
         return files_added
 
-    def search_archive(self, regex):
-        search, ok = QInputDialog.getText(
-            self,
-            "Search archive",
-            f"This will search through the currently filtered list. Search keyword{' (Regex)' if regex else ''}:",
-        )
-        if not ok:
-            return
-
-        def update_list_with_matches(returned):
-            matches = returned[0]
-            for x in range(self.listwidget.active_list.count()):
-                item = self.listwidget.active_list.item(x)
-
-                if not item.isHidden():
-                    item.setHidden(item.text() not in matches)
-
-            self.message_box.done(1)
-            QMessageBox.information(
-                self,
-                "Search finished",
-                f"Found <b>{returned[1]}</b> instances over <b>{len(matches)}</b> files. Filtering list.",
-            )
-
-        self.message_box = QMessageBox(
-            QMessageBox.Icon.Information,
-            "Search in progress",
-            "Searching the archive, please wait...",
-            QMessageBox.StandardButton.Ok,
-            self,
-        )
-        self.message_box.button(QMessageBox.StandardButton.Ok).setEnabled(False)
-
-        self.thread = ArchiveSearchThread(
-            self, search, self.settings.encoding, self.archive, regex
-        )
-        self.thread.matched.connect(update_list_with_matches)
-        self.thread.start()
-        self.message_box.exec()
-
     def new(self):
         if not self.close_unsaved():
             return
@@ -539,15 +450,6 @@ class MainWindow(QMainWindow, HasUiElements):
             return
 
         self.tabs.widget(index).save()
-
-    def search_file(self):
-        index = self.tabs.currentIndex()
-        if index < 0:
-            return
-
-        widget = self.tabs.widget(index)
-        if hasattr(widget, "search_file"):
-            widget.search_file()
 
     def add_file(self):
         file = QFileDialog.getOpenFileName(self, "Add file", self.settings.last_dir)[0]
@@ -632,44 +534,6 @@ class MainWindow(QMainWindow, HasUiElements):
 
         return ret
 
-    def filter_list(self):
-        search = self.search.currentText()
-        invert = self.invert_box.isChecked()
-        re_filter = self.re_filter_box.isChecked()
-        use_regex = self.regex_filter_box.isChecked()
-        active_list = self.listwidget.active_list
-
-        for x in range(active_list.count()):
-            item = active_list.item(x)
-            if item.isHidden() and re_filter:
-                continue
-
-            match = False
-            if use_regex:
-                try:
-                    if re.search(search, item.text(), re.IGNORECASE):
-                        match = True
-                except re.error:
-                    pass
-            else:
-                if fnmatch.fnmatch(item.text(), f"*{search}*"):
-                    match = True
-
-            item.setHidden(not (match ^ invert) if search else False)
-
-        if search == "":
-            return
-
-        if not any(
-            self.search.itemText(x)
-            for x in range(self.search.count())
-            if self.search.itemText(x) == search
-        ):
-            self.search.addItem(search)
-
-        if self.search.count() > SEARCH_HISTORY_MAX:
-            self.search.removeItem(0)
-
     def delete(self):
         if not self.is_file_selected():
             return
@@ -743,7 +607,9 @@ class MainWindow(QMainWindow, HasUiElements):
         self.archive.add_file(name, self.archive.read_file(original_name))
         self.archive.remove_file(original_name)
 
-        self.listwidget.active_list.currentItem().setText(name)
+        self.listwidget.remove_files([original_name])
+        self.listwidget.add_files([name])
+
         QMessageBox.information(self, "Done", "File renamed")
 
     def extract(self):
@@ -796,26 +662,37 @@ class MainWindow(QMainWindow, HasUiElements):
         if not path:
             return
 
+        active_list = self.listwidget.active_list
         files = [
-            self.listwidget.active_list.item(x).text()
-            for x in range(self.listwidget.active_list.count())
-            if not self.listwidget.active_list.item(x).isHidden()
+            active_list.item(x).text()
+            for x in range(active_list.count())
+            if not active_list.item(x).isHidden()
         ]
 
         self.archive.extract(path, files=files)
         self.settings.last_dir = path
         QMessageBox.information(self, "Done", "Filtered files have been extracted")
 
-    def file_double_clicked(self, _):
-        name = self.listwidget.active_list.currentItem().text()
-
+    def _find_tab_index(self, name: str):
         for x in range(self.tabs.count()):
             if self.tabs.tabText(x) == name:
-                self.tabs.setCurrentIndex(x)
-                break
-        else:
-            tab = get_tab_from_file_type(name)(self, self.archive, name)
+                return x
 
+        return -1
+
+    def _create_tab(self, name: str, preview: bool = False):
+        tab = get_tab_from_file_type(name)(self, self.archive, name)
+
+        if preview:
+            tab.generate_preview()
+            if is_preview(self.tabs.tabText(0)) and self.tabs.currentIndex() >= 0:
+                self.remove_file_tab(0)
+
+            self.tabs.insertTab(0, tab, preview_name(name))
+            self.tabs.setTabToolTip(0, preview_name(name))
+            self.tabs.setCurrentIndex(0)
+            return
+        else:
             if self.settings.external:
                 tab.open_externally()
             else:
@@ -825,32 +702,27 @@ class MainWindow(QMainWindow, HasUiElements):
             index = self.tabs.count() - 1
             self.tabs.setTabToolTip(index, name)
             self.tabs.setCurrentIndex(index)
-
             if self.tabs.tabText(0) == preview_name(name):
                 self.remove_file_tab(0)
+
+    def file_double_clicked(self, _):
+        name = self.listwidget.active_list.currentItem().text()
+        idx = self._find_tab_index(name)
+        if idx != -1:
+            self.tabs.setCurrentIndex(idx)
+        else:
+            self._create_tab(name, preview=False)
 
     def file_single_clicked(self):
         if not self.settings.preview_enabled:
             return
 
         name = self.listwidget.active_list.currentItem().text()
-        if not self.archive.file_exists(name):
-            return
-
-        for x in range(self.tabs.count()):
-            if self.tabs.tabText(x) == name:
-                self.tabs.setCurrentIndex(x)
-                break
+        idx = self._find_tab_index(name)
+        if idx != -1:
+            self.tabs.setCurrentIndex(idx)
         else:
-            tab = get_tab_from_file_type(name)(self, self.archive, name)
-            tab.generate_preview()
-
-            if is_preview(self.tabs.tabText(0)) and self.tabs.currentIndex() >= 0:
-                self.remove_file_tab(0)
-
-            self.tabs.insertTab(0, tab, preview_name(name))
-            self.tabs.setTabToolTip(0, preview_name(name))
-            self.tabs.setCurrentIndex(0)
+            self._create_tab(name, preview=True)
 
     def close_tab_shortcut(self):
         index = self.tabs.currentIndex()

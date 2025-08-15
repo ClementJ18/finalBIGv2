@@ -149,12 +149,12 @@ def create_shortcuts(main: "MainWindow"):
             QShortcut(
                 QKeySequence("CTRL+SHIFT+F"),
                 main,
-                lambda: main.search_archive(main.search_archive_regex_bool),
+                lambda: main.search_archive(main.settings.search_archive_regex_bool),
             ),
             "Search for text in the archive",
         ),
         (
-            QShortcut(QKeySequence("ALT+R"), main, main.toggle_search_archive_regex),
+            QShortcut(QKeySequence("ALT+R"), main, main.settings.toggle_search_archive_regex),
             "Toggle the 'Search for text in archive' shortcut regex search on/off",
         ),
     ]
@@ -208,7 +208,7 @@ def create_menu(main: "MainWindow"):
     main.dark_mode_action = QAction("Dark Mode?", main, checkable=True)
     main.dark_mode_action.setToolTip("Whether to use dark mode or not")
     main.dark_mode_action.setChecked(main.settings.dark_mode)
-    main.dark_mode_action.triggered.connect(main.toggle_dark_mode)
+    main.dark_mode_action.triggered.connect(main.settings.toggle_dark_mode)
     option_menu.addAction(main.dark_mode_action)
 
     main.use_external_action = QAction("Use external programs?", main, checkable=True)
@@ -216,7 +216,7 @@ def create_menu(main: "MainWindow"):
         "Whether to open using the internal editor or the user's default application"
     )
     main.use_external_action.setChecked(main.settings.external)
-    main.use_external_action.triggered.connect(main.toggle_external)
+    main.use_external_action.triggered.connect(main.settings.toggle_external)
     option_menu.addAction(main.use_external_action)
 
     main.large_archive_action = QAction("Use Large Archive Architecture?", main, checkable=True)
@@ -224,16 +224,16 @@ def create_menu(main: "MainWindow"):
         "Change the system to use Large Archives, a slower system that handles large files better"
     )
     main.large_archive_action.setChecked(main.settings.large_archive)
-    main.large_archive_action.triggered.connect(main.toggle_large_archives)
+    main.large_archive_action.triggered.connect(main.settings.toggle_large_archives)
     option_menu.addAction(main.large_archive_action)
 
     main.preview_action = QAction("Preview?", main, checkable=True)
     main.preview_action.setToolTip("Enable previewing files")
     main.preview_action.setChecked(main.settings.preview_enabled)
-    main.preview_action.triggered.connect(main.toggle_preview)
+    main.preview_action.triggered.connect(main.settings.toggle_preview)
     option_menu.addAction(main.preview_action)
 
-    option_menu.addAction("Set encoding", main.set_encoding)
+    option_menu.addAction("Set encoding", main.settings.set_encoding)
 
 
 def generate_ui(main: "MainWindow", basedir: str):

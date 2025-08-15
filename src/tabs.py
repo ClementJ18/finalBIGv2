@@ -11,11 +11,9 @@ import webbrowser
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
-from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
-from PyQt6.QtMultimediaWidgets import QVideoWidget
 import audio_metadata
 from pyBIG.base_archive import BaseArchive
-from PyQt6.QtCore import QTimer, QUrl, Qt
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -445,21 +443,18 @@ class VideoTab(GenericTab):
         self.video_frame = QWidget()
         layout.addWidget(self.video_frame)
 
-        # VLC player
         self.instance: vlc.Instance = vlc.Instance()
         self.player: vlc.MediaPlayer = self.instance.media_player_new()
         self.media: vlc.Media = self.instance.media_new(self.path)
         self.player.set_media(self.media)
 
-        # Embed the video in the PyQt widget
-        if sys.platform.startswith('win'):
+        if sys.platform.startswith("win"):
             self.player.set_hwnd(int(self.video_frame.winId()))
-        elif sys.platform.startswith('linux'):
+        elif sys.platform.startswith("linux"):
             self.player.set_xwindow(int(self.video_frame.winId()))
-        elif sys.platform.startswith('darwin'):
+        elif sys.platform.startswith("darwin"):
             self.player.set_nsobject(int(self.video_frame.winId()))
 
-        # Playback buttons
         button_layout = QHBoxLayout()
         layout.addLayout(button_layout)
 
@@ -475,20 +470,17 @@ class VideoTab(GenericTab):
         self.stop_button.clicked.connect(self.player.stop)
         button_layout.addWidget(self.stop_button)
 
-        # Playback slider
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 1000)
         self.slider.sliderMoved.connect(self.set_position)
         layout.addWidget(self.slider)
 
-        # Timer to update slider
         self.timer = QTimer(self)
         self.timer.setInterval(200)
         self.timer.timeout.connect(self.update_slider)
         self.timer.start()
 
     def set_position(self, position):
-        # VLC expects a float between 0 and 1
         self.player.set_position(position / 1000.0)
 
     def update_slider(self):
@@ -502,10 +494,42 @@ class VideoTab(GenericTab):
         return super().deleteLater()
 
 
+MULTIE_MEDIA_TYPES = (
+    ".mp3",
+    ".wav",
+    ".ogg",
+    ".flac",
+    ".aac",
+    ".m4a",
+    ".opus",
+    ".wma",
+    ".aiff",
+    ".amr",
+    ".mid",
+    ".midi",
+    ".au",
+    ".ra",
+    ".mp2",  # audio
+    ".mp4",
+    ".m4v",
+    ".avi",
+    ".mkv",
+    ".mov",
+    ".flv",
+    ".webm",
+    ".ts",
+    ".m2ts",
+    ".ogv",
+    ".wmv",
+    ".3gp",
+    ".3g2",
+    ".asf",
+    ".mxf",  # video
+)
+
 TAB_TYPES = {
     (".bse", ".map"): MapTab,
-    (".wav", ".mp3"): SoundTab,
-    (".mp4", ".m4v", ".avi", ".mkv", ".mov", ".flv", ".webm", ".ts", ".m2ts", ".ogv", ".wmv", ".3gp", ".3g2", ".asf", ".mxf"): VideoTab,
+    MULTIE_MEDIA_TYPES: VideoTab,
     (".cah",): CustomHeroTab,
     tuple(Image.registered_extensions().keys()): ImageTab,
 }
