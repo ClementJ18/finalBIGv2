@@ -273,6 +273,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if self.listwidget.currentIndex() == self.listwidget.count() - 2:
             self.listwidget.setCurrentIndex(self.listwidget.count() - 3)
 
+        if self.listwidget.widget(index).is_favorite:
+            self.listwidget.favorite_list = None
+
         self.listwidget.remove_tab(index)
 
     def add_file_list(self, name="List"):
@@ -611,6 +614,20 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.listwidget.add_files([name])
 
         QMessageBox.information(self, "Done", "File renamed")
+
+    def add_favorites(self):
+        if not self.is_file_selected():
+            return
+
+        items = self.listwidget.active_list.selectedItems()
+        self.listwidget.add_favorites([item.text() for item in items])
+
+    def remove_favorites(self):
+        if not self.is_file_selected():
+            return
+
+        items = self.listwidget.favorite_list.selectedItems()
+        self.listwidget.remove_favorites([item.text() for item in items])
 
     def extract(self):
         if not self.is_file_selected():
