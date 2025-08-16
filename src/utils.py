@@ -70,6 +70,22 @@ def str_to_bool(value):
     return bool(int(value))
 
 
+def human_readable_size(size: int, decimal_places: int = 2) -> str:
+    """Convert bytes to a human-readable format (KB, MB, GB...)."""
+    if size < 0:
+        raise ValueError("Size must be non-negative")
+
+    units = ["B", "KB", "MB", "GB", "TB", "PB"]
+    index = 0
+    size = float(size)
+
+    while size >= 1024 and index < len(units) - 1:
+        size /= 1024
+        index += 1
+
+    return f"{size:.{decimal_places}f} {units[index]}"
+
+
 ENCODING_LIST = [
     "ascii",
     "big5",

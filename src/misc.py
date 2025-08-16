@@ -56,7 +56,9 @@ class ArchiveSearchThread(QThread):
                 break
 
         for name, modified_entry in self.archive.modified_entries.items():
-            has_match = re.findall(self.search if self.regex else re.escape(self.search), modified_entry.content)
+            has_match = re.findall(
+                self.search if self.regex else re.escape(self.search), modified_entry.content
+            )
             if has_match:
                 matches.append(name)
 
@@ -99,7 +101,6 @@ class FileList(QListWidget):
         if self.main.archive is None:
             return
 
-
         self.files_list = self.main.archive.file_list()
         self.addItems(self.files_list)
 
@@ -125,6 +126,7 @@ class FileList(QListWidget):
                     break
             else:
                 i += 1
+
 
 class TabWidget(QTabWidget):
     def remove_tab(self, index):

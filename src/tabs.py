@@ -7,14 +7,13 @@ import tempfile
 import traceback
 from typing import Type, TYPE_CHECKING
 import vlc
-import webbrowser
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
 import audio_metadata
 from pyBIG.base_archive import BaseArchive
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import QTimer, QUrl, Qt
+from PyQt6.QtGui import QDesktopServices, QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -35,7 +34,13 @@ from watchdog.events import FileSystemEventHandler
 
 from cah import CustomHero
 from editor import Editor
-from utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
+from utils import (
+    SEARCH_HISTORY_MAX,
+    decode_string,
+    encode_string,
+    human_readable_size,
+    unsaved_name,
+)
 
 if TYPE_CHECKING:
     from main import MainWindow
@@ -55,6 +60,9 @@ class GenericTab(QWidget):
         self.external: bool = False
         self.path: str = None
 
+        self.observer = None
+        self.tmp = None
+
     def generate_layout(self):
         layout = QHBoxLayout()
 
@@ -70,7 +78,7 @@ class GenericTab(QWidget):
         self.generate_layout()
 
     def save(self):
-        pass
+        raise NotImplementedError
 
     def gather_files(self) -> list:
         return [self.name]
@@ -93,13 +101,33 @@ class GenericTab(QWidget):
                     f.write(self.archive.read_file(file))
 
         self.path = os.path.join(self.tmp.name, os.path.basename(self.name))
-        webbrowser.open(self.path)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self.path))
 
         self.observer = Observer()
         self.observer.schedule(SaveEventHandler(self, self.name, self.path), self.tmp.name)
 
         self.observer.start()
         self.external = True
+
+    def generate_controller(self):
+        controls_layout = QHBoxLayout()
+        controls_layout.addWidget(QLabel(f"<b>Size:</b> {human_readable_size(len(self.data))}"))
+        controls_layout.addWidget(QLabel(f"<b>Type:</b> {self.file_type}"))
+        controls_layout.addStretch()
+
+        return controls_layout
+
+    def deleteLater(self):
+        if self.observer is not None:
+            self.observer.stop()
+            self.observer.join()
+            shutil.rmtree(self.tmp.name, True)
+
+        return super().deleteLater()
+
+    def delete(self):
+        index = self.main.tabs.indexOf(self)
+        self.main.tabs.remove_tab(index)
 
 
 class TextTab(GenericTab):
@@ -151,6 +179,7 @@ class TextTab(GenericTab):
         self.whole_box.setToolTip("Match only whole words?")
         search_layout.addWidget(self.whole_box)
 
+        layout.addLayout(self.generate_controller())
         self.setLayout(layout)
 
     def generate_preview(self):
@@ -316,6 +345,7 @@ class CustomHeroTab(GenericTab):
         data.setText(text)
 
         layout.addWidget(data)
+        layout.addLayout(self.generate_controller())
         self.setLayout(layout)
 
 
@@ -345,6 +375,7 @@ class SoundTab(GenericTab):
         )
 
         layout.addWidget(data)
+        layout.addLayout(self.generate_controller())
         self.setLayout(layout)
 
     def play_audio(self):
@@ -359,26 +390,27 @@ class SaveEventHandler(FileSystemEventHandler):
     def __init__(self, tab, name, tmp_name):
         super().__init__()
 
-        self.tab = tab
+        self.tab: GenericTab = tab
         self.file_name = name
         self.tmp_name = tmp_name
 
     def on_modified(self, event):
         if event.src_path == self.tmp_name:
-            self.tab.save()
+            QTimer.singleShot(0, self.tab.save)
 
-    def on_closed(self, event):
-        if event.src_path == self.tmp_name:
-            self.tab.delete()
+    def on_moved(self, event):
+        if event.dest_path == self.tmp_name:
+            QTimer.singleShot(0, self.tab.save)
+
+    # some editors trigger on close when saving so don't use it
+    # def on_closed(self, event):
+    # pass
 
 
 class MapTab(GenericTab):
     def __init__(self, main: QMainWindow, archive: BaseArchive, name):
         super().__init__(main, archive, name)
-
-        self.observer = None
         self.map_path = None
-        self.tmp = None
 
     def gather_files(self):
         folder = os.path.dirname(self.name)
@@ -404,18 +436,6 @@ class MapTab(GenericTab):
             self.archive.edit_file(self.name, data)
             self.data = data
 
-    def delete(self):
-        index = self.main.tabs.indexOf(self)
-        self.main.tabs.remove_tab(index)
-
-    def deleteLater(self) -> None:
-        if self.observer is not None:
-            self.observer.stop()
-            self.observer.join()
-            shutil.rmtree(self.tmp.name, True)
-
-        return super().deleteLater()
-
     def generate_preview(self):
         layout = QHBoxLayout()
 
@@ -426,6 +446,7 @@ class MapTab(GenericTab):
         )
 
         layout.addWidget(data)
+        layout.addLayout(self.generate_controller())
         self.setLayout(layout)
 
 
@@ -474,6 +495,7 @@ class VideoTab(GenericTab):
         self.slider.setRange(0, 1000)
         self.slider.sliderMoved.connect(self.set_position)
         layout.addWidget(self.slider)
+        layout.addLayout(self.generate_controller())
 
         self.timer = QTimer(self)
         self.timer.setInterval(200)
@@ -495,6 +517,7 @@ class VideoTab(GenericTab):
 
 
 MULTIE_MEDIA_TYPES = (
+    # audio
     ".mp3",
     ".wav",
     ".ogg",
@@ -509,7 +532,8 @@ MULTIE_MEDIA_TYPES = (
     ".midi",
     ".au",
     ".ra",
-    ".mp2",  # audio
+    ".mp2",
+    # video
     ".mp4",
     ".m4v",
     ".avi",
@@ -524,7 +548,7 @@ MULTIE_MEDIA_TYPES = (
     ".3gp",
     ".3g2",
     ".asf",
-    ".mxf",  # video
+    ".mxf",
 )
 
 TAB_TYPES = {
