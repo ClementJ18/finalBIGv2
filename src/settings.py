@@ -125,10 +125,14 @@ class Settings:
     def toggle_large_archives(self):
         is_checked = self.main.large_archive_action.isChecked()
         self.large_archive = is_checked
+
+        message = f"The large archive settings has been {'enabled' if is_checked else 'disabled'}, please restart FinalBIGv2 to apply the change."
+        if is_checked:
+            message += "\n\nNote: Large archives takes less memory but may increase loading times."
         QMessageBox.information(
             self.main,
             "Large Archive Setting Changed",
-            f"The large archive settings has been {'enabled' if is_checked else 'disabled'}, please restart FinalBIGv2 to apply the change.",
+            message,
         )
 
     def toggle_dark_mode(self):

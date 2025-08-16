@@ -280,8 +280,6 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def add_file_list(self, name="List"):
         widget = FileList(self)
-        widget.itemSelectionChanged.connect(self.file_single_clicked)
-        widget.doubleClicked.connect(self.file_double_clicked)
         widget.update_list()
 
         self.listwidget.insertTab(self.listwidget.count() - 1, widget, name)
@@ -487,7 +485,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         ret = self.add_file_to_archive(url, name, blank)
         if ret != QMessageBox.StandardButton.No:
-            self.listwidget.add_files([name], ret is not None)
+            self.listwidget.add_files([name])
 
     def _add_folder(self, url):
         skip_all = False

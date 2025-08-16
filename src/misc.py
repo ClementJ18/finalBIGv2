@@ -35,8 +35,6 @@ class ArchiveSearchThread(QThread):
 
     def run(self):
         matches = []
-        self.archive.repack()
-
         buffer = self.archive.bytes().decode(self.encoding)
         indexes = {
             match.start()
@@ -48,12 +46,19 @@ class ArchiveSearchThread(QThread):
             matched_indexes = {
                 index
                 for index in indexes
-                if entry.position <= index <= (entry.position + entry.size)
+                if entry.position <= index < (entry.position + entry.size)
             }
             if matched_indexes:
                 indexes -= matched_indexes
                 matches.append(name)
-                continue
+
+            if not indexes:
+                break
+
+        for name, modified_entry in self.archive.modified_entries.items():
+            has_match = re.findall(self.search if self.regex else re.escape(self.search), modified_entry.content)
+            if has_match:
+                matches.append(name)
 
         self.matched.emit((matches, match_count))
 
@@ -67,6 +72,12 @@ class FileList(QListWidget):
 
         self.main: MainWindow = parent
         self.is_favorite = is_favorite
+
+        self.itemSelectionChanged.connect(self.main.file_single_clicked)
+        self.doubleClicked.connect(self.main.file_double_clicked)
+        self.setSortingEnabled(True)
+
+        self.files_list: list[str] = []
 
     def context_menu(self, pos):
         global_position = self.mapToGlobal(pos)
@@ -88,10 +99,32 @@ class FileList(QListWidget):
         if self.main.archive is None:
             return
 
-        self.addItems(self.main.archive.file_list())
+
+        self.files_list = self.main.archive.file_list()
+        self.addItems(self.files_list)
 
         self.main.filter_list()
 
+    def add_files(self, files: List[str]):
+        new_files = [file for file in files if file not in self.files_list]
+
+        if new_files:
+            self.addItems(new_files)
+            self.files_list.extend(new_files)
+
+    def remove_files(self, files: List[str]):
+        files_set = set(files)
+        i = 0
+        while i < self.count():
+            item_text = self.item(i).text()
+            if item_text in files_set:
+                self.takeItem(i)
+                files_set.remove(item_text)
+                self.files_list.remove(item_text)
+                if not files_set:
+                    break
+            else:
+                i += 1
 
 class TabWidget(QTabWidget):
     def remove_tab(self, index):
@@ -142,8 +175,6 @@ class FileListTabs(TabWidget):
     def create_favorite_tab(self):
         self.favorite_list = FileList(self.main, is_favorite=True)
         self.insertTab(0, self.favorite_list, "Favorites")
-        self.favorite_list.itemSelectionChanged.connect(self.main.file_single_clicked)
-        self.favorite_list.doubleClicked.connect(self.main.file_double_clicked)
 
     def add_favorites(self, files: List[str]):
         if self.favorite_list is None:
@@ -156,20 +187,7 @@ class FileListTabs(TabWidget):
         self.remove_files_from_tab(self.favorite_list, files)
 
     def add_files_to_tab(self, widget: FileList, files: List[str]):
-        items = [widget.item(x).text() for x in range(widget.count())]
-        new_files = [file for file in files if file not in items]
-
-        if new_files:
-            widget.insertItems(widget.count(), new_files)
-            widget.sortItems()
+        widget.add_files(files)
 
     def remove_files_from_tab(self, widget: FileList, files: List[str]):
-        file_list = files.copy()
-        for i in reversed(range(widget.count())):
-            file = widget.item(i).text()
-            if file in file_list:
-                widget.takeItem(i)
-                file_list.remove(file)
-
-            if not file_list:
-                break
+        widget.remove_files(files)

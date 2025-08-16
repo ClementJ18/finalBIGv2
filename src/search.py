@@ -66,24 +66,28 @@ class SearchManager:
         re_filter = self.re_filter_box.isChecked()
         use_regex = self.regex_filter_box.isChecked()
         active_list = self.listwidget.active_list
+        files = active_list.files_list
 
-        for x in range(active_list.count()):
-            item = active_list.item(x)
+        if use_regex:
+            pattern = re.compile(search, re.IGNORECASE)
+
+        for i, text in enumerate(files):
+            item = active_list.item(i)
             if item.isHidden() and re_filter:
                 continue
 
-            match = (
-                bool(re.search(search, item.text(), re.IGNORECASE))
-                if use_regex
-                else fnmatch.fnmatch(item.text(), f"*{search}*")
-            )
-            item.setHidden(not (match ^ invert) if search else False)
+            if search:
+                if use_regex:
+                    match = bool(pattern.search(text))
+                else:
+                    match = fnmatch.fnmatch(text, f"*{search}*")
+                item.setHidden(not (match ^ invert))
+            else:
+                item.setHidden(False)
 
-        if search == "":
-            return
-
-        if search not in [self.search.itemText(x) for x in range(self.search.count())]:
-            self.search.addItem(search)
-
-        if self.search.count() > SEARCH_HISTORY_MAX:
-            self.search.removeItem(0)
+        if search:
+            existing_searches = [self.search.itemText(x) for x in range(self.search.count())]
+            if search not in existing_searches:
+                self.search.addItem(search)
+            if self.search.count() > SEARCH_HISTORY_MAX:
+                self.search.removeItem(0)
