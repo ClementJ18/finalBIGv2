@@ -280,8 +280,6 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def add_file_list(self, name="List"):
         widget = FileList(self)
-        widget.itemSelectionChanged.connect(self.file_single_clicked)
-        widget.doubleClicked.connect(self.file_double_clicked)
         widget.update_list()
 
         self.listwidget.insertTab(self.listwidget.count() - 1, widget, name)
@@ -723,7 +721,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 self.remove_file_tab(0)
 
     def file_double_clicked(self, _):
-        name = self.listwidget.active_list.currentItem().text()
+        table = self.listwidget.active_list
+        row = table.currentRow()
+        if row == -1:
+            return
+
+        name = table.item(row, 0).text()  # first column = file name
         idx = self._find_tab_index(name)
         if idx != -1:
             self.tabs.setCurrentIndex(idx)
@@ -734,7 +737,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not self.settings.preview_enabled:
             return
 
-        name = self.listwidget.active_list.currentItem().text()
+        table = self.listwidget.active_list
+        row = table.currentRow()
+        if row == -1:
+            return
+
+        name = table.item(row, 0).text()
         idx = self._find_tab_index(name)
         if idx != -1:
             self.tabs.setCurrentIndex(idx)

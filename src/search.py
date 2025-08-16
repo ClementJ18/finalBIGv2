@@ -65,19 +65,24 @@ class SearchManager:
         invert = self.invert_box.isChecked()
         re_filter = self.re_filter_box.isChecked()
         use_regex = self.regex_filter_box.isChecked()
-        active_list = self.listwidget.active_list
+        active_table = self.listwidget.active_list
 
-        for x in range(active_list.count()):
-            item = active_list.item(x)
-            if item.isHidden() and re_filter:
+        for row in range(active_table.rowCount()):
+            name_item = active_table.item(row, 0)
+            if not name_item:
                 continue
 
+            if active_table.isRowHidden(row) and re_filter:
+                continue
+
+            text = name_item.text()
             match = (
-                bool(re.search(search, item.text(), re.IGNORECASE))
+                bool(re.search(search, text, re.IGNORECASE))
                 if use_regex
-                else fnmatch.fnmatch(item.text(), f"*{search}*")
+                else fnmatch.fnmatch(text, f"*{search}*")
             )
-            item.setHidden(not (match ^ invert) if search else False)
+
+            active_table.setRowHidden(row, not (match ^ invert) if search else False)
 
         if search == "":
             return

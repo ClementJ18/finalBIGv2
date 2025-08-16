@@ -1,12 +1,16 @@
+import os
 import re
 from typing import TYPE_CHECKING, List
 
 from PyQt6.QtCore import QThread, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QHeaderView,
     QListWidget,
     QMenu,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
 )
 from pyBIG import base_archive
 
@@ -58,15 +62,32 @@ class ArchiveSearchThread(QThread):
         self.matched.emit((matches, match_count))
 
 
-class FileList(QListWidget):
-    def __init__(self, parent, is_favorite: bool = False):
+class FileList(QTableWidget):
+    def __init__(self, parent: "MainWindow", is_favorite: bool = False):
         super().__init__(parent)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.context_menu)
 
-        self.main: MainWindow = parent
+        self.setColumnCount(3)
+        self.setHorizontalHeaderLabels(["Name", "Size", "Type"])
+        self.setSortingEnabled(True)  # allow sorting by clicking headers
+        self.horizontalHeader().setStretchLastSection(True)
+
+        self.main = parent
         self.is_favorite = is_favorite
+
+        self.itemSelectionChanged.connect(self.main.file_single_clicked)
+        self.doubleClicked.connect(self.main.file_double_clicked)
+
+        self.setSortingEnabled(True)
+        self.setShowGrid(False) 
+        self.setAlternatingRowColors(True)
+        self.verticalHeader().setVisible(False)
+        header = self.horizontalHeader()
+        header.setHighlightSections(False)
+        header.setStretchLastSection(True)
+        self.setAlternatingRowColors(False)
 
     def context_menu(self, pos):
         global_position = self.mapToGlobal(pos)
@@ -84,13 +105,31 @@ class FileList(QListWidget):
         menu.exec(global_position)
 
     def update_list(self):
-        self.clear()
+        self.setRowCount(0)
         if self.main.archive is None:
             return
 
-        self.addItems(self.main.archive.file_list())
+        files = self.main.archive.file_list()
+        self.setRowCount(len(files))
+
+        for row, filename in enumerate(files):
+            entry = self.main.archive.get_file_entry(filename)
+            size = entry.size
+            ftype = os.path.splitext(filename)[1][1:] or ""
+
+            self.setItem(row, 0, QTableWidgetItem(filename))
+
+            size_item = QTableWidgetItem(f"{size / 1024:.1f} KB")
+            size_item.setData(Qt.ItemDataRole.UserRole, size)
+            self.setItem(row, 1, size_item)
+
+            self.setItem(row, 2, QTableWidgetItem(ftype))
 
         self.main.filter_list()
+        self.resizeColumnToContents(0)
+        self.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.Interactive
+        )
 
 
 class TabWidget(QTabWidget):
@@ -142,8 +181,6 @@ class FileListTabs(TabWidget):
     def create_favorite_tab(self):
         self.favorite_list = FileList(self.main, is_favorite=True)
         self.insertTab(0, self.favorite_list, "Favorites")
-        self.favorite_list.itemSelectionChanged.connect(self.main.file_single_clicked)
-        self.favorite_list.doubleClicked.connect(self.main.file_double_clicked)
 
     def add_favorites(self, files: List[str]):
         if self.favorite_list is None:
