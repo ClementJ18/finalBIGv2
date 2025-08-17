@@ -75,7 +75,7 @@ class FileList(QListWidget):
         self.main: MainWindow = parent
         self.is_favorite = is_favorite
 
-        self.itemSelectionChanged.connect(self.main.file_single_clicked)
+        self.itemClicked.connect(self.main.file_single_clicked)
         self.doubleClicked.connect(self.main.file_double_clicked)
         self.setSortingEnabled(True)
 

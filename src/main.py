@@ -49,12 +49,7 @@ basedir = os.path.dirname(__file__)
 
 def handle_exception(exc_type, exc_value, exc_traceback):
     tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-
-    if QApplication.instance() is None:
-        sys.stderr.write("[Unhandled exception before QApplication started]\n")
-        sys.stderr.write(tb)
-        sys.stderr.flush()
-        return
+    traceback.print_exception(exc_type, exc_value, exc_traceback)
 
     errorbox = QMessageBox(
         QMessageBox.Icon.Critical,
@@ -149,6 +144,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
         for path in recent_files:
             action = self.recent_menu.addAction(path, self.open_recent_file)
+            if path == self.path:
+                action.setEnabled(False)
+
             self.lock_exceptions.append(action)
             action.setData(path)
             action.setToolTip(path)
@@ -219,6 +217,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         return True
 
     def _open(self, path):
+        self.close_archive()
+
         try:
             if self.settings.large_archive:
                 archive = InDiskArchive(path)

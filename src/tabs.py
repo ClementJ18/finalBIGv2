@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QMainWindow,
     QSlider,
@@ -115,7 +116,9 @@ class GenericTab(QWidget):
         controls_layout.addWidget(QLabel(f"<b>Type:</b> {self.file_type}"))
         controls_layout.addStretch()
 
-        return controls_layout
+        controls_widget = QWidget()
+        controls_widget.setLayout(controls_layout)
+        return controls_widget
 
     def deleteLater(self):
         if self.observer is not None:
@@ -179,7 +182,7 @@ class TextTab(GenericTab):
         self.whole_box.setToolTip("Match only whole words?")
         search_layout.addWidget(self.whole_box)
 
-        layout.addLayout(self.generate_controller())
+        layout.addWidget(self.generate_controller())
         self.setLayout(layout)
 
     def generate_preview(self):
@@ -345,7 +348,7 @@ class CustomHeroTab(GenericTab):
         data.setText(text)
 
         layout.addWidget(data)
-        layout.addLayout(self.generate_controller())
+        layout.addWidget(self.generate_controller())
         self.setLayout(layout)
 
 
@@ -375,7 +378,7 @@ class SoundTab(GenericTab):
         )
 
         layout.addWidget(data)
-        layout.addLayout(self.generate_controller())
+        layout.addWidget(self.generate_controller())
         self.setLayout(layout)
 
     def play_audio(self):
@@ -446,11 +449,15 @@ class MapTab(GenericTab):
         )
 
         layout.addWidget(data)
-        layout.addLayout(self.generate_controller())
+        layout.addWidget(self.generate_controller())
         self.setLayout(layout)
 
 
 class VideoTab(GenericTab):
+    def __init__(self, main, archive, name):
+        super().__init__(main, archive, name)
+        self.instance = None
+
     def generate_layout(self):
         layout = QVBoxLayout()
 
@@ -462,9 +469,19 @@ class VideoTab(GenericTab):
         self.setLayout(layout)
 
         self.video_frame = QWidget()
-        layout.addWidget(self.video_frame)
+        layout.addWidget(self.video_frame, stretch=1)
 
-        self.instance: vlc.Instance = vlc.Instance()
+        try:
+            self.instance: vlc.Instance = vlc.Instance()
+        except Exception:
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setWindowTitle("Missing Dependency")
+            msg.setText("VLC media player is required for video and audio playback .")
+            msg.setInformativeText("Please install VLC from:\n https://www.videolan.org/vlc/")
+            msg.exec()
+            return
+
         self.player: vlc.MediaPlayer = self.instance.media_player_new()
         self.media: vlc.Media = self.instance.media_new(self.path)
         self.player.set_media(self.media)
@@ -494,8 +511,9 @@ class VideoTab(GenericTab):
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, 1000)
         self.slider.sliderMoved.connect(self.set_position)
+
         layout.addWidget(self.slider)
-        layout.addLayout(self.generate_controller())
+        layout.addWidget(self.generate_controller())
 
         self.timer = QTimer(self)
         self.timer.setInterval(200)
@@ -503,16 +521,24 @@ class VideoTab(GenericTab):
         self.timer.start()
 
     def set_position(self, position):
+        if self.instance is None:
+            return
+
         self.player.set_position(position / 1000.0)
 
     def update_slider(self):
+        if self.instance is None:
+            return
+
         if self.player.is_playing():
             pos = int(self.player.get_position() * 1000)
             self.slider.setValue(pos)
 
     def deleteLater(self) -> None:
-        self.player.stop()
-        shutil.rmtree(self.path, True)
+        if self.instance is not None:
+            self.player.stop()
+            shutil.rmtree(self.path, True)
+
         return super().deleteLater()
 
 
