@@ -157,6 +157,9 @@ def create_shortcuts(main: "MainWindow"):
             QShortcut(QKeySequence("ALT+R"), main, main.settings.toggle_search_archive_regex),
             "Toggle the 'Search for text in archive' shortcut regex search on/off",
         ),
+        ("Arrow keys", "Rotate a model in a w3d tab"),
+        ("Mouse wheel", "Zoom a model in and out in a w3d tab"),
+        ("Mouse drag", "Rotate a model in a w3d tab"),
     ]
 
 

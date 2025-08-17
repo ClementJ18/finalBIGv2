@@ -1,3 +1,8 @@
+import os
+import sys
+import vlc
+
+
 SEARCH_HISTORY_MAX = 20
 RECENT_FILES_MAX = 10
 HELP_STRING = """
@@ -84,6 +89,19 @@ def human_readable_size(size: int, decimal_places: int = 2) -> str:
         index += 1
 
     return f"{size:.{decimal_places}f} {units[index]}"
+
+
+def get_vlc_instance():
+    base_dir = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    if sys.platform.startswith("win"):
+        vlc_path = os.path.join(base_dir, "vlc")
+        dll_path = os.path.join(vlc_path, "libvlc.dll")
+
+        if os.path.exists(dll_path):
+            os.environ["PATH"] = vlc_path + ";" + os.environ["PATH"]
+            return vlc.Instance("--plugin-path=" + os.path.join(vlc_path, "plugins"))
+
+    return vlc.Instance()
 
 
 ENCODING_LIST = [
