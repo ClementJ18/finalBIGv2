@@ -5,7 +5,7 @@ import qdarktheme
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
-from utils import ENCODING_LIST, RECENT_FILES_MAX
+from utils.utils import ENCODING_LIST, RECENT_FILES_MAX
 
 if TYPE_CHECKING:
     from main import MainWindow

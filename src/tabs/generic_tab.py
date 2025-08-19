@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QTextEdit, QWidget
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from utils import human_readable_size
+from utils.utils import human_readable_size
 
 if TYPE_CHECKING:
     from main import MainWindow

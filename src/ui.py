@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from misc import FileList, FileListTabs, TabWidget
-from utils import resource_path
+from utils.utils import resource_path
 
 if TYPE_CHECKING:
     from main import MainWindow

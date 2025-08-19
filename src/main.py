@@ -33,7 +33,7 @@ from search import SearchManager
 from settings import Settings
 from tabs import get_tab_from_file_type
 from ui import HasUiElements, generate_ui
-from utils import (
+from utils.utils import (
     ABOUT_STRING,
     HELP_STRING,
     is_preview,
