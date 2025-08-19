@@ -839,7 +839,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             for url in md.urls():
                 local_file = url.toLocalFile()
                 if local_file.endswith(".big"):
-                    return self._open(local_file)
+                    self._open(local_file)
+                    break
 
                 if os.path.isfile(local_file):
                     self._add_file(local_file)

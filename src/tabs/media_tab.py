@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 
@@ -165,10 +166,32 @@ class MediaTab(GenericTab):
         return f"{mins:02}:{secs:02}"
 
     def deleteLater(self) -> None:
+        # Stop timer
+        if hasattr(self, "timer") and self.timer.isActive():
+            self.timer.stop()
+
+        # Stop media player
         if self.player is not None:
             self.player.stop()
+            self.player.setVideoOutput(None)
+            self.player.setAudioOutput(None)
+            self.player.deleteLater()
+            self.player = None
+
+        if self.audio_output is not None:
+            self.audio_output.deleteLater()
+            self.audio_output = None
+
+        # Clean up temp file
+        if self.path and os.path.exists(self.path):
             try:
-                shutil.rmtree(self.path, True)
+                os.remove(self.path)
             except Exception:
                 pass
+            self.path = None
+
         return super().deleteLater()
+    
+    def closeEvent(self, event):
+        self.deleteLater()
+        super().closeEvent(event)
