@@ -47,7 +47,7 @@ VIDEO_MEDIA_TYPES = (
 MULTIE_MEDIA_TYPES = AUDIO_MEDIA_TYPES + VIDEO_MEDIA_TYPES
 
 
-class VideoTab(GenericTab):
+class MediaTab(GenericTab):
     def __init__(self, main, archive, name, preview):
         super().__init__(main, archive, name, preview)
         self.player = None

@@ -8,12 +8,12 @@ from tabs.generic_tab import GenericTab
 from tabs.image_tab import ImageTab
 from tabs.map_tab import MapTab
 from tabs.text_tab import TextTab
-from tabs.video_tab import MULTIE_MEDIA_TYPES, VideoTab
+from tabs.media_tab import MULTIE_MEDIA_TYPES, MediaTab
 from tabs.w3d_tab import W3DTab
 
 TAB_TYPES = {
     (".bse", ".map"): MapTab,
-    MULTIE_MEDIA_TYPES: VideoTab,
+    MULTIE_MEDIA_TYPES: MediaTab,
     (".cah",): CustomHeroTab,
     (".w3d",): W3DTab,
     tuple(Image.registered_extensions().keys()): ImageTab,

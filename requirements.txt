@@ -12,6 +12,5 @@ pyBIG
 watchdog
 pyqtdarktheme
 ruff
-playsound3
 PyOpenGL
 PyOpenGL_accelerate
