@@ -17,7 +17,6 @@ from model.w3d.structs.mesh_structs.vertex_material import (
 )
 from model.w3d.utils.helpers import const_size, list_size, read_chunk_array, skip_unknown_chunk
 
-
 W3D_CHUNK_PRELIT_UNLIT = 0x00000023
 W3D_CHUNK_PRELIT_VERTEX = 0x00000024
 W3D_CHUNK_PRELIT_LIGHTMAP_MULTI_PASS = 0x00000025

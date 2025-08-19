@@ -2,6 +2,7 @@
 # Written by Stephan Vedder and Michael Schnabel
 
 import logging
+
 from model.common.structs.mesh_structs.aabbtree import W3D_CHUNK_AABBTREE, AABBTree
 from model.common.structs.mesh_structs.shader_material import (
     W3D_CHUNK_SHADER_MATERIAL,
@@ -16,6 +17,7 @@ from model.common.structs.mesh_structs.triangle import Triangle
 from model.common.structs.mesh_structs.vertex_influence import VertexInfluence
 from model.w3d.io_binary import (
     STRING_LENGTH,
+    Vector,
     read_chunk_head,
     read_fixed_string,
     read_float,
@@ -41,7 +43,6 @@ from model.w3d.structs.mesh_structs.vertex_material import (
     VertexMaterial,
 )
 from model.w3d.structs.version import Version
-from model.w3d.io_binary import Vector
 from model.w3d.utils.helpers import (
     const_size,
     list_size,

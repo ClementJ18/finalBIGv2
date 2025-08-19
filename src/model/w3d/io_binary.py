@@ -4,7 +4,6 @@
 import math
 import struct
 
-
 HEAD = 8  # chunk_type(long) + chunk_size(long)
 STRING_LENGTH = 16
 LARGE_STRING_LENGTH = STRING_LENGTH * 2

@@ -1,5 +1,5 @@
-import os
 from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from misc import FileList, FileListTabs, TabWidget
+from utils import resource_path
 
 if TYPE_CHECKING:
     from main import MainWindow
@@ -45,7 +46,7 @@ def create_ui(main: "MainWindow", basedir: str):
     main.listwidget.setElideMode(Qt.TextElideMode.ElideLeft)
     main.listwidget.setTabsClosable(True)
     main.listwidget.setUsesScrollButtons(True)
-    main.listwidget.addTab(FileList(main), QIcon(os.path.join(basedir, "new_tab.png")), "")
+    main.listwidget.addTab(FileList(main), QIcon(resource_path("new_tab.png")), "")
     main.listwidget.tabBar().setTabButton(
         0, main.listwidget.tabBar().ButtonPosition.RightSide, None
     )

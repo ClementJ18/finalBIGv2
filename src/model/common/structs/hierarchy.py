@@ -2,8 +2,10 @@
 # Written by Stephan Vedder and Michael Schnabel
 
 import logging
+
 from model.w3d.io_binary import (
     STRING_LENGTH,
+    Vector,
     read_chunk_head,
     read_fixed_string,
     read_list,
@@ -13,7 +15,6 @@ from model.w3d.io_binary import (
     read_vector,
 )
 from model.w3d.structs.version import Version
-from model.w3d.io_binary import Vector
 from model.w3d.utils.helpers import const_size, list_size, skip_unknown_chunk, vec_list_size
 
 W3D_CHUNK_HIERARCHY_HEADER = 0x00000101

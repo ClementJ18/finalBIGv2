@@ -3,9 +3,8 @@
 
 
 import logging
-from model.w3d.io_binary import read_float, read_ulong, read_vector
-from model.w3d.io_binary import Vector
 
+from model.w3d.io_binary import Vector, read_float, read_ulong, read_vector
 
 surface_types = [
     "LightMetal",

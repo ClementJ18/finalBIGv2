@@ -1,15 +1,14 @@
 import re
 from typing import TYPE_CHECKING, List
 
-from PyQt6.QtCore import QThread, Qt, pyqtSignal
+from pyBIG import base_archive
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QListWidget,
     QMenu,
     QTabWidget,
 )
-from pyBIG import base_archive
-
 
 if TYPE_CHECKING:
     from main import MainWindow

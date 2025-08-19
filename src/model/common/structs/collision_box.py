@@ -6,12 +6,12 @@ import logging
 from model.common.structs.rgba import RGBA
 from model.w3d.io_binary import (
     LARGE_STRING_LENGTH,
+    Vector,
     read_long_fixed_string,
     read_ulong,
     read_vector,
 )
 from model.w3d.structs.version import Version
-from model.w3d.io_binary import Vector
 from model.w3d.utils.helpers import const_size
 
 W3D_CHUNK_BOX = 0x00000740

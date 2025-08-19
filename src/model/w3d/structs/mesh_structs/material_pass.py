@@ -19,7 +19,6 @@ from model.w3d.utils.helpers import (
     vec_list_size,
 )
 
-
 W3D_CHUNK_TEXTURE_STAGE = 0x00000048
 W3D_CHUNK_TEXTURE_IDS = 0x00000049
 W3D_CHUNK_STAGE_TEXCOORDS = 0x0000004A

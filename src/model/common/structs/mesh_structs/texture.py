@@ -4,7 +4,6 @@
 from model.w3d.io_binary import read_chunk_head, read_float, read_string, read_ulong, read_ushort
 from model.w3d.utils.helpers import const_size, skip_unknown_chunk, text_size
 
-
 W3D_CHUNK_TEXTURES = 0x00000030
 W3D_CHUNK_TEXTURE_INFO = 0x00000033
 

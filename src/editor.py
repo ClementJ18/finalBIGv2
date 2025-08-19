@@ -1,10 +1,10 @@
 import os
 import re
-from PyQt6.QtGui import QColor, QShortcut, QKeySequence
-from PyQt6.Qsci import QsciScintilla, QsciLexerLua, QsciLexerCustom, QsciLexerXML
 
+from PyQt6.Qsci import QsciLexerCustom, QsciLexerLua, QsciLexerXML, QsciScintilla
+from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 
-from keywords import KEYWORDS, BEHAVIORS, CODEBLOCKS, SINGLETONS
+from keywords import BEHAVIORS, CODEBLOCKS, KEYWORDS, SINGLETONS
 
 KEYWORDS_PATTERN = re.compile(f"^({'|'.join(KEYWORDS)})$")
 BEHAVIORS_PATTERN = re.compile(f"^({'|'.join(BEHAVIORS)})$")

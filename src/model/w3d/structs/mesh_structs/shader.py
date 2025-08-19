@@ -3,7 +3,6 @@
 
 from model.w3d.io_binary import read_ubyte
 
-
 W3D_CHUNK_SHADERS = 0x00000029
 
 

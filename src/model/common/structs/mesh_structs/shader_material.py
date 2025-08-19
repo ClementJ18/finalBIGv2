@@ -2,7 +2,9 @@
 # Written by Stephan Vedder and Michael Schnabel
 
 import logging
+
 from model.w3d.io_binary import (
+    Vector,
     read_chunk_head,
     read_float,
     read_long,
@@ -12,9 +14,7 @@ from model.w3d.io_binary import (
     read_vector2,
     read_vector4,
 )
-from model.w3d.io_binary import Vector
 from model.w3d.utils.helpers import const_size, skip_unknown_chunk
-
 
 W3D_CHUNK_SHADER_MATERIAL_HEADER = 0x52
 

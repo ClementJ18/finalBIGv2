@@ -2,6 +2,7 @@
 # Written by Stephan Vedder and Michael Schnabel
 
 import logging
+
 from model.w3d.io_binary import HEAD, read_chunk_head
 
 

@@ -3,6 +3,7 @@ import re
 from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
+
 from misc import ArchiveSearchThread
 from utils import SEARCH_HISTORY_MAX
 

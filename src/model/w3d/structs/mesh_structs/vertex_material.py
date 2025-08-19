@@ -5,7 +5,6 @@ from model.common.structs.rgba import RGBA
 from model.w3d.io_binary import read_chunk_head, read_float, read_long, read_string
 from model.w3d.utils.helpers import const_size, skip_unknown_chunk, text_size
 
-
 W3D_CHUNK_VERTEX_MATERIALS = 0x0000002A
 W3D_CHUNK_VERTEX_MATERIAL_INFO = 0x0000002D
 

@@ -4,29 +4,29 @@ import tempfile
 import traceback
 from typing import cast
 
-from pyBIG import InMemoryArchive, InDiskArchive, base_archive
-from PyQt6.QtCore import Qt, QEvent
+import qdarktheme
+from pyBIG import InDiskArchive, InMemoryArchive, base_archive
+from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import (
+    QAction,
     QCloseEvent,
     QDragEnterEvent,
     QDragMoveEvent,
     QDropEvent,
     QIcon,
-    QAction,
 )
 from PyQt6.QtWidgets import (
-    QMenu,
     QApplication,
     QFileDialog,
     QInputDialog,
     QMainWindow,
+    QMenu,
+    QMenuBar,
     QMessageBox,
     QPushButton,
     QTabBar,
     QWidget,
-    QMenuBar,
 )
-import qdarktheme
 
 from misc import FileList
 from search import SearchManager
@@ -40,6 +40,7 @@ from utils import (
     is_unsaved,
     normalize_name,
     preview_name,
+    resource_path,
 )
 
 __version__ = "0.12.0"
@@ -111,6 +112,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.update_archive_name("No Archive Open")
         self.lock_ui(True)
+        self.update_recent_files_menu()
 
         return True
 
@@ -696,9 +698,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         return -1
 
     def _create_tab(self, name: str, preview: bool = False):
-        tab = get_tab_from_file_type(name)(self, self.archive, name)
-
         if preview:
+            if self.tabs.count() > 0 and self.tabs.tabText(0) == preview_name(name):
+                self.tabs.setCurrentIndex(0)
+                return
+
+            tab = get_tab_from_file_type(name)(self, self.archive, name, preview)
             tab.generate_preview()
             if is_preview(self.tabs.tabText(0)) and self.tabs.currentIndex() >= 0:
                 self.remove_file_tab(0)
@@ -708,6 +713,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.tabs.setCurrentIndex(0)
             return
         else:
+            for i in range(self.tabs.count()):
+                if self.tabs.tabText(i) == name:
+                    self.tabs.setCurrentIndex(i)
+                    return
+
+            tab = get_tab_from_file_type(name)(self, self.archive, name, preview)
             if self.settings.external:
                 tab.open_externally()
             else:
@@ -842,8 +853,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     w = MainWindow()
 
-    if os.path.exists(os.path.join(basedir, "icon.ico")):
-        app.setWindowIcon(QIcon(os.path.join(basedir, "icon.ico")))
+    ico_path = resource_path("icon.ico")
+    if os.path.exists(ico_path):
+        app.setWindowIcon(QIcon(ico_path))
 
     w.show()
     sys.exit(app.exec())

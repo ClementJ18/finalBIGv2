@@ -4,7 +4,6 @@
 from model.w3d.io_binary import read_ulong
 from model.w3d.utils.helpers import const_size
 
-
 W3D_CHUNK_MATERIAL_INFO = 0x00000028
 
 

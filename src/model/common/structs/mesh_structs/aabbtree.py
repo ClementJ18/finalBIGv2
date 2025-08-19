@@ -2,6 +2,7 @@
 # Written by Stephan Vedder and Michael Schnabel
 
 from model.w3d.io_binary import (
+    Vector,
     read_chunk_head,
     read_list,
     read_long,
@@ -9,9 +10,7 @@ from model.w3d.io_binary import (
     read_ulong,
     read_vector,
 )
-from model.w3d.io_binary import Vector
 from model.w3d.utils.helpers import const_size, list_size, long_list_size, skip_unknown_chunk
-
 
 W3D_CHUNK_AABBTREE_HEADER = 0x00000091
 

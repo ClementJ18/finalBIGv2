@@ -13,4 +13,3 @@ watchdog
 pyqtdarktheme
 ruff
 playsound
-python-vlc

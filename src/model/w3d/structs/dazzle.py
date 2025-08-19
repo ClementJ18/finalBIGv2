@@ -4,7 +4,6 @@
 from model.w3d.io_binary import read_chunk_head, read_string
 from model.w3d.utils.helpers import const_size, skip_unknown_chunk, text_size
 
-
 W3D_CHUNK_DAZZLE = 0x00000900
 W3D_CHUNK_DAZZLE_NAME = 0x00000901
 W3D_CHUNK_DAZZLE_TYPENAME = 0x00000902
