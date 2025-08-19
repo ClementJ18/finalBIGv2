@@ -2,7 +2,7 @@ import re
 from typing import TYPE_CHECKING, List
 
 from pyBIG import base_archive
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QListWidget,
@@ -79,6 +79,16 @@ class FileList(QListWidget):
         self.setSortingEnabled(True)
 
         self.files_list: list[str] = []
+
+        self.installEventFilter(self)
+
+    def eventFilter(self, source: QObject, event: QEvent):
+        if source is self and event.type() == QEvent.Type.KeyPress:
+            if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+                current = self.currentItem()
+                if current:
+                    self.main.file_single_clicked()
+        return super().eventFilter(source, event)
 
     def context_menu(self, pos):
         global_position = self.mapToGlobal(pos)
