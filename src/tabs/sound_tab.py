@@ -2,7 +2,7 @@ import shutil
 import tempfile
 
 import audio_metadata
-import playsound
+import playsound3 as playsound
 import tbm_utils
 from PyQt6.QtWidgets import QPushButton, QTextEdit, QVBoxLayout
 

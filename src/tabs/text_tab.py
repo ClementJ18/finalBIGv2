@@ -1,14 +1,14 @@
 import os
 import re
+
 from PyQt6.Qsci import QsciLexerCustom, QsciLexerLua, QsciLexerXML, QsciScintilla
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
-from utils.keywords import BEHAVIORS, CODEBLOCKS, KEYWORDS, SINGLETONS
 from tabs.generic_tab import GenericTab
+from utils.keywords import BEHAVIORS, CODEBLOCKS, KEYWORDS, SINGLETONS
 from utils.utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
-
 
 KEYWORDS_PATTERN = re.compile(f"^({'|'.join(KEYWORDS)})$")
 BEHAVIORS_PATTERN = re.compile(f"^({'|'.join(BEHAVIORS)})$")
