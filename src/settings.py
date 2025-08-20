@@ -105,7 +105,7 @@ class Settings:
 
     def set_encoding(self):
         name, ok = QInputDialog.getItem(
-            self,
+            self.main,
             "Encoding",
             "Select an encoding",
             ENCODING_LIST,

@@ -204,8 +204,8 @@ def create_menu(main: "MainWindow"):
     tools_menu.addAction("Find text in archive (REGEX)", lambda: main.search_archive(True))
 
     option_menu = menu.addMenu("&Help")
-    option_menu.addAction("About", main.show_about)
-    option_menu.addAction("Help", main.show_help)
+    main.lock_exceptions.append(option_menu.addAction("About", main.show_about))
+    main.lock_exceptions.append(option_menu.addAction("Help", main.show_help))
 
     option_menu.addSeparator()
 
@@ -214,6 +214,7 @@ def create_menu(main: "MainWindow"):
     main.dark_mode_action.setChecked(main.settings.dark_mode)
     main.dark_mode_action.triggered.connect(main.settings.toggle_dark_mode)
     option_menu.addAction(main.dark_mode_action)
+    main.lock_exceptions.append(main.dark_mode_action)
 
     main.use_external_action = QAction("Use external programs?", main, checkable=True)
     main.use_external_action.setToolTip(
@@ -222,6 +223,7 @@ def create_menu(main: "MainWindow"):
     main.use_external_action.setChecked(main.settings.external)
     main.use_external_action.triggered.connect(main.settings.toggle_external)
     option_menu.addAction(main.use_external_action)
+    main.lock_exceptions.append(main.use_external_action)
 
     main.large_archive_action = QAction("Use Large Archive Architecture?", main, checkable=True)
     main.large_archive_action.setToolTip(
@@ -230,14 +232,16 @@ def create_menu(main: "MainWindow"):
     main.large_archive_action.setChecked(main.settings.large_archive)
     main.large_archive_action.triggered.connect(main.settings.toggle_large_archives)
     option_menu.addAction(main.large_archive_action)
+    main.lock_exceptions.append(main.large_archive_action)
 
     main.preview_action = QAction("Preview?", main, checkable=True)
     main.preview_action.setToolTip("Enable previewing files")
     main.preview_action.setChecked(main.settings.preview_enabled)
     main.preview_action.triggered.connect(main.settings.toggle_preview)
     option_menu.addAction(main.preview_action)
+    main.lock_exceptions.append(main.preview_action)
 
-    option_menu.addAction("Set encoding", main.settings.set_encoding)
+    main.lock_exceptions.append(option_menu.addAction("Set encoding", main.settings.set_encoding))
 
 
 def generate_ui(main: "MainWindow", basedir: str):
