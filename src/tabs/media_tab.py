@@ -74,7 +74,7 @@ class MediaTab(GenericTab):
         self.player.setVideoOutput(self.video_frame)
         self.player.setSource(QUrl.fromLocalFile(self.path))
 
-        if self.file_type.lower() in AUDIO_MEDIA_TYPES:
+        if self.file_type in AUDIO_MEDIA_TYPES:
             self.has_video = False
             self.video_frame.hide()
         else:

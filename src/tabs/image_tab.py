@@ -79,10 +79,10 @@ class ImageTab(GenericTab):
             width, height = self.image.size
             controls_layout.addWidget(QLabel(f"<b>Dimensions:</b> {width}x{height}"))
 
-            if self.file_type.lower() == ".tga":
+            if self.file_type == ".tga":
                 bit_depth = {"RGBA": "32-bit", "RGB": "24-bit"}.get(self.image.mode, "N/A")
                 controls_layout.addWidget(QLabel(f"<b>Format:</b> {bit_depth}"))
-            elif self.file_type.lower() == ".dds":
+            elif self.file_type == ".dds":
                 controls_layout.addWidget(
                     QLabel(f"<b>Format:</b> {self._get_dds_format(self.data)}")
                 )

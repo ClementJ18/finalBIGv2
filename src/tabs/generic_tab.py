@@ -45,7 +45,7 @@ class GenericTab(QWidget):
         self.main = main
 
         self.name = name
-        self.file_type: str = os.path.splitext(name)[1]
+        self.file_type: str = os.path.splitext(name)[1].lower()
         self.data: bytes = self.archive.read_file(name)
 
         self.external: bool = False

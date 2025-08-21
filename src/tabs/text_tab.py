@@ -301,7 +301,7 @@ class Editor(QsciScintilla):
         self.SendScintilla(QsciScintilla.SCI_SETMULTIPASTE, 1)
         self.SendScintilla(QsciScintilla.SCI_SETADDITIONALSELECTIONTYPING, True)
 
-        self.file_type = os.path.splitext(file_name)[1]
+        self.file_type = os.path.splitext(file_name)[1].lower()
         self.lexer = DefaultLexer(self, dark_mode)
         if self.file_type == ".lua":
             self.lexer = QsciLexerLua(self)
@@ -353,7 +353,7 @@ class TextTab(GenericTab):
         search_layout = QHBoxLayout()
         search_widget.setLayout(search_layout)
 
-        if self.file_type.lower() in (".inc", ".ini", ".wnd", ".txt", ".xml", ".lua", ".str"):
+        if self.file_type in (".inc", ".ini", ".wnd", ".txt", ".xml", ".lua", ".str"):
             highlighting = QCheckBox("Highlighting")
             highlighting.setToolTip("Enable/disable syntax highlighting")
             highlighting.setChecked(True)
