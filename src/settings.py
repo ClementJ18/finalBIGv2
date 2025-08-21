@@ -96,6 +96,7 @@ class Settings:
         self.set_value("history/recent_files", files)
 
     def add_to_recent_files(self, path):
+        path = os.path.normpath(path)
         recent_files = self.recent_files()
         if path in recent_files:
             recent_files.remove(path)
