@@ -12,8 +12,8 @@ HELP_STRING = """
 <h2> File Search </h2>
 File search is based on Unix filename pattern. This means that something like 
 "sauron.ini" will look for a file called exactly "sauron.ini". If you're looking for
-something like "data/ini/objects/sauron.ini" make sure you add a * to match everything
-before. Like "*/sauron.ini".<br/>
+something like "data\ini\objects\sauron.ini" make sure you add a * to match everything
+before. Like "*\sauron.ini".<br/>
 <br/>
 Quick rundown
 <ul>
