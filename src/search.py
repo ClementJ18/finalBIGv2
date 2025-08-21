@@ -62,33 +62,41 @@ class SearchManager:
             widget.search_file()
 
     def filter_list(self: "MainWindow"):
-        search = self.search.currentText()
+        search = self.search.currentText().strip()
         invert = self.invert_box.isChecked()
         re_filter = self.re_filter_box.isChecked()
         use_regex = self.regex_filter_box.isChecked()
         active_list = self.listwidget.active_list
-        files = active_list.files_list
+        files = [active_list.item(i) for i in range(active_list.count())]
+
+        if not search:  
+            active_list.setUpdatesEnabled(False)
+            for item in files:
+                item.setHidden(False)
+            active_list.setUpdatesEnabled(True)
+            return
 
         if use_regex:
-            pattern = re.compile(search, re.IGNORECASE)
+            try:
+                pattern = re.compile(search, re.IGNORECASE)
+                matcher = pattern.search
+            except re.error:
+                return
+        else:
+            from functools import partial
+            matcher = partial(fnmatch.fnmatch, pat=f"*{search}*")
 
-        for i, text in enumerate(files):
-            item = active_list.item(i)
+        active_list.setUpdatesEnabled(False)
+        for item in files:
             if item.isHidden() and re_filter:
                 continue
 
-            if search:
-                if use_regex:
-                    match = bool(pattern.search(text))
-                else:
-                    match = fnmatch.fnmatch(text, f"*{search}*")
-                item.setHidden(not (match ^ invert))
-            else:
-                item.setHidden(False)
+            match = bool(matcher(item.text()))
+            item.setHidden(not (match ^ invert))
+        active_list.setUpdatesEnabled(True)
 
-        if search:
-            existing_searches = [self.search.itemText(x) for x in range(self.search.count())]
-            if search not in existing_searches:
-                self.search.addItem(search)
+        existing_searches = {self.search.itemText(x) for x in range(self.search.count())}
+        if search not in existing_searches:
+            self.search.addItem(search)
             if self.search.count() > SEARCH_HISTORY_MAX:
                 self.search.removeItem(0)
