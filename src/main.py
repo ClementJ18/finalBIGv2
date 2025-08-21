@@ -602,6 +602,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not ok:
             return
 
+        if name == original_name:
+            return
+
         for i in reversed(range(self.tabs.count())):
             tab_name = self.tabs.tabText(i)
             if tab_name in (preview_name(name), name):
