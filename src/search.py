@@ -69,7 +69,7 @@ class SearchManager:
         active_list = self.listwidget.active_list
         files = [active_list.item(i) for i in range(active_list.count())]
 
-        if not search:  
+        if not search:
             active_list.setUpdatesEnabled(False)
             for item in files:
                 item.setHidden(False)
@@ -84,6 +84,7 @@ class SearchManager:
                 return
         else:
             from functools import partial
+
             matcher = partial(fnmatch.fnmatch, pat=f"*{search}*")
 
         active_list.setUpdatesEnabled(False)

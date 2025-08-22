@@ -191,7 +191,7 @@ class MediaTab(GenericTab):
             self.path = None
 
         return super().deleteLater()
-    
+
     def closeEvent(self, event):
         self.deleteLater()
         super().closeEvent(event)

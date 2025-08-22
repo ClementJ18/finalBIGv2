@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from pyBIG.base_archive import BaseArchive
 from PyQt6.QtCore import QTimer, QUrl
 from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QTextEdit, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QWidget
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -71,7 +71,7 @@ class GenericTab(QWidget):
         self.generate_layout()
 
     def save(self):
-        raise NotImplementedError
+        pass
 
     def gather_files(self) -> list:
         return [self.name]
@@ -106,6 +106,12 @@ class GenericTab(QWidget):
         controls_layout = QHBoxLayout()
         controls_layout.addWidget(QLabel(f"<b>Size:</b> {human_readable_size(len(self.data))}"))
         controls_layout.addWidget(QLabel(f"<b>Type:</b> {self.file_type}"))
+
+        if not self.preview:
+            save_btn = QPushButton("Save")
+            save_btn.clicked.connect(self.save)
+            controls_layout.addWidget(save_btn)
+
         controls_layout.addStretch()
 
         controls_widget = QWidget()
