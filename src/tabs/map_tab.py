@@ -35,6 +35,8 @@ class MapTab(GenericTab):
             self.archive.edit_file(self.name, data)
             self.data = data
 
+        super().save()
+
     def generate_preview(self):
         layout = QHBoxLayout()
 

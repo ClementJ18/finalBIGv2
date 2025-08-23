@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from misc import FileList, FileListTabs, TabWidget
+from misc import FileList, FileListTabs, SearchBox, TabWidget
 from utils.utils import resource_path
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ def create_ui(main: "MainWindow", basedir: str):
     layout.addWidget(search_widget, stretch=1)
     search_widget.setLayout(search_layout)
 
-    main.search = QComboBox(main)
+    main.search = SearchBox(main, enter_callback=main.filter_list)
     main.search.setEditable(True)
     completer = main.search.completer()
     completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
@@ -110,27 +110,6 @@ def create_shortcuts(main: "MainWindow"):
         ("Left-click drag", "Select multiple files"),
         ("Right-click on file/selection", "Context menu"),
         (
-            QShortcut(
-                QKeySequence("CTRL+N"),
-                main,
-                main.new,
-            ),
-            "Create a new archive",
-        ),
-        (
-            QShortcut(QKeySequence("CTRL+O"), main, main.open),
-            "Open a different archive",
-        ),
-        (QShortcut(QKeySequence("CTRL+S"), main, main.save), "Save the archive"),
-        (
-            QShortcut(QKeySequence("CTRL+SHIFT+S"), main, main.save_editor),
-            "Save the current text editor",
-        ),
-        (
-            QShortcut(QKeySequence("CTRL+RETURN"), main, main.filter_list),
-            "Filter the list with the current search",
-        ),
-        (
             QShortcut(QKeySequence("CTRL+F"), main, main.search_file),
             "Search the current text editor",
         ),
@@ -142,22 +121,6 @@ def create_shortcuts(main: "MainWindow"):
             "CTRL+;",
             "Comment/uncomment the currently selected text",
         ),
-        (
-            QShortcut(QKeySequence("CTRL+H"), main, main.show_help),
-            "Show the help",
-        ),
-        (
-            QShortcut(
-                QKeySequence("CTRL+SHIFT+F"),
-                main,
-                lambda: main.search_archive(main.settings.search_archive_regex_bool),
-            ),
-            "Search for text in the archive",
-        ),
-        (
-            QShortcut(QKeySequence("ALT+R"), main, main.settings.toggle_search_archive_regex),
-            "Toggle the 'Search for text in archive' shortcut regex search on/off",
-        ),
         ("Arrow keys", "Rotate a model in a w3d tab"),
         ("Mouse wheel", "Zoom a model in and out in a w3d tab"),
         ("Mouse drag", "Rotate a model in a w3d tab"),
@@ -167,56 +130,92 @@ def create_shortcuts(main: "MainWindow"):
 def create_menu(main: "MainWindow"):
     menu = main.menuBar()
     file_menu = menu.addMenu("&File")
-    main.lock_exceptions.append(file_menu.addAction("New", main.new))
-    main.lock_exceptions.append(file_menu.addAction("Open", main.open))
-    file_menu.addAction("Close", main.close_archive)
-    file_menu.addAction("Save", main.save)
-    file_menu.addAction("Save as...", main.save_as)
-    main.recent_menu = QMenu("Open Recent", main)
+    new_archive_action = file_menu.addAction("&New", main.new)
+    new_archive_action.setShortcut(QKeySequence("CTRL+N"))
+    main.lock_exceptions.append(new_archive_action)
+
+    open_archive_action = file_menu.addAction("&Open", main.open)
+    open_archive_action.setShortcut(QKeySequence("CTRL+O"))
+    main.lock_exceptions.append(open_archive_action)
+
+    close_archive_action = file_menu.addAction("&Close", main.close_archive)
+    close_archive_action.setShortcut(QKeySequence("CTRL+SHIFT+W"))
+
+    save_archive_action = file_menu.addAction("&Save", main.save)
+    save_archive_action.setShortcut(QKeySequence("CTRL+S"))
+
+    file_menu.addAction("Save &As...", main.save_as)
+
+    main.recent_menu = QMenu("Open &Recent", main)
     file_menu.addMenu(main.recent_menu)
     main.update_recent_files_menu()
 
     edit_menu = menu.addMenu("&Edit")
-    edit_menu.addAction("New file", main.new_file)
-    edit_menu.addAction("Add file", main.add_file)
-    edit_menu.addAction("Add directory", main.add_folder)
-    edit_menu.addAction("Delete selection", main.delete)
-    edit_menu.addAction("Rename file", main.rename)
+    new_file_action = edit_menu.addAction("&New File", main.new_file)
+    new_file_action.setShortcut(QKeySequence("CTRL+SHIFT+N"))
+
+    add_file_action = edit_menu.addAction("Add &File", main.add_file)
+    add_file_action.setShortcut(QKeySequence("CTRL+SHIFT+A"))
+
+    add_folder_action = edit_menu.addAction("&Add Directory", main.add_folder)
+    add_folder_action.setShortcut(QKeySequence("CTRL+SHIFT+O"))
+
+    delete_files_action = edit_menu.addAction("&Delete Selection", main.delete)
+    delete_files_action.setShortcut(QKeySequence("CTRL+SHIFT+D"))
+
+    rename_file_action = edit_menu.addAction("&Rename File", main.rename)
+    rename_file_action.setShortcut(QKeySequence("CTRL+SHIFT+R"))
+
+    save_current_editor_action = edit_menu.addAction("&Save current tab", main.save_editor)
+    save_current_editor_action.setShortcut(QKeySequence("CTRL+SHIFT+S"))
+
+    save_all_editors_action = edit_menu.addAction("Save all &tabs", main.save_all_editors)
+    save_all_editors_action.setShortcut(QKeySequence("ALT+SHIFT+S"))
 
     edit_menu.addSeparator()
 
-    edit_menu.addAction("Extract selection", main.extract)
-    edit_menu.addAction("Extract all", main.extract_all)
-    edit_menu.addAction("Extract filtered", main.extract_filtered)
+    edit_menu.addAction("&Extract Selection", main.extract)
+    edit_menu.addAction("Extract &All", main.extract_all)
+    edit_menu.addAction("Extract &Filtered", main.extract_filtered)
 
     tools_menu = menu.addMenu("&Tools")
-    tools_menu.addAction("Dump entire file list", lambda: main.dump_list(False))
-    tools_menu.addAction("Dump filtered file list", lambda: main.dump_list(True))
-    tools_menu.addAction("Merge another archive", main.merge_archives)
+    tools_menu.addAction("Dump &Entire file list", lambda: main.dump_list(False))
+    tools_menu.addAction("Dump &Filtered file list", lambda: main.dump_list(True))
+    tools_menu.addAction("Merge &Another archive", main.merge_archives)
 
     tools_menu.addSeparator()
 
-    tools_menu.addAction("Copy file name", main.copy_name)
+    tools_menu.addAction("&Copy file name", main.copy_name)
 
     tools_menu.addSeparator()
 
-    tools_menu.addAction("Find text in archive", lambda: main.search_archive(False))
-    tools_menu.addAction("Find text in archive (REGEX)", lambda: main.search_archive(True))
+    search_archive_action = tools_menu.addAction(
+        "&Find text in archive", lambda: main.search_archive(False)
+    )
+    search_archive_action.setShortcut(QKeySequence("CTRL+SHIFT+F"))
+
+    search_achive_regex_action = tools_menu.addAction(
+        "Find text in archive (&REGEX)", lambda: main.search_archive(True)
+    )
+    search_achive_regex_action.setShortcut(QKeySequence("ALT+SHIFT+F"))
 
     option_menu = menu.addMenu("&Help")
-    main.lock_exceptions.append(option_menu.addAction("About", main.show_about))
-    main.lock_exceptions.append(option_menu.addAction("Help", main.show_help))
+    main.lock_exceptions.append(option_menu.addAction("&About", main.show_about))
+
+    help_action = option_menu.addAction("&Help", main.show_help)
+    help_action.setShortcut(QKeySequence("CTRL+H"))
+    main.lock_exceptions.append(help_action)
 
     option_menu.addSeparator()
 
-    main.dark_mode_action = QAction("Dark Mode?", main, checkable=True)
+    main.dark_mode_action = QAction("&Dark Mode?", main, checkable=True)
     main.dark_mode_action.setToolTip("Whether to use dark mode or not")
     main.dark_mode_action.setChecked(main.settings.dark_mode)
     main.dark_mode_action.triggered.connect(main.settings.toggle_dark_mode)
     option_menu.addAction(main.dark_mode_action)
     main.lock_exceptions.append(main.dark_mode_action)
 
-    main.use_external_action = QAction("Use external programs?", main, checkable=True)
+    main.use_external_action = QAction("Use &External Programs?", main, checkable=True)
     main.use_external_action.setToolTip(
         "Whether to open using the internal editor or the user's default application"
     )
@@ -225,7 +224,7 @@ def create_menu(main: "MainWindow"):
     option_menu.addAction(main.use_external_action)
     main.lock_exceptions.append(main.use_external_action)
 
-    main.large_archive_action = QAction("Use Large Archive Architecture?", main, checkable=True)
+    main.large_archive_action = QAction("Use &Large Archive Architecture?", main, checkable=True)
     main.large_archive_action.setToolTip(
         "Change the system to use Large Archives, a slower system that handles large files better"
     )
@@ -234,14 +233,14 @@ def create_menu(main: "MainWindow"):
     option_menu.addAction(main.large_archive_action)
     main.lock_exceptions.append(main.large_archive_action)
 
-    main.preview_action = QAction("Preview?", main, checkable=True)
-    main.preview_action.setToolTip("Enable previewing files")
+    main.preview_action = QAction("&Preview?", main, checkable=True)
+    main.preview_action.setToolTip("Enable Previewing files")
     main.preview_action.setChecked(main.settings.preview_enabled)
     main.preview_action.triggered.connect(main.settings.toggle_preview)
     option_menu.addAction(main.preview_action)
     main.lock_exceptions.append(main.preview_action)
 
-    main.lock_exceptions.append(option_menu.addAction("Set encoding", main.settings.set_encoding))
+    main.lock_exceptions.append(option_menu.addAction("&Set encoding", main.settings.set_encoding))
 
 
 def generate_ui(main: "MainWindow", basedir: str):

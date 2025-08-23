@@ -5,6 +5,7 @@ from pyBIG import base_archive
 from PyQt6.QtCore import QEvent, QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QListWidget,
     QMenu,
     QTabWidget,
@@ -12,6 +13,20 @@ from PyQt6.QtWidgets import (
 
 if TYPE_CHECKING:
     from main import MainWindow
+
+
+class SearchBox(QComboBox):
+    def __init__(self, *args, enter_callback=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.enter_callback = enter_callback
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+            if self.enter_callback:
+                self.enter_callback()
+            return
+
+        super().keyPressEvent(event)
 
 
 class ArchiveSearchThread(QThread):

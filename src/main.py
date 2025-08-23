@@ -32,6 +32,7 @@ from misc import FileList
 from search import SearchManager
 from settings import Settings
 from tabs import get_tab_from_file_type
+from tabs.generic_tab import GenericTab
 from ui import HasUiElements, generate_ui
 from utils.utils import (
     ABOUT_STRING,
@@ -144,8 +145,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             action = self.recent_menu.addAction("No Recent Files")
             action.setEnabled(False)
             return
-        for path in recent_files:
-            action = self.recent_menu.addAction(path, self.open_recent_file)
+        for index, path in enumerate(recent_files):
+            action = self.recent_menu.addAction(f"&{index + 1}. {path}", self.open_recent_file)
             if path == self.path:
                 action.setEnabled(False)
 
@@ -191,8 +192,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return False
 
         for index in range(self.tabs.count()):
-            if is_unsaved(self.tabs.tabText(index)):
-                self.tabs.widget(index).save()
+            tab: GenericTab = self.tabs.widget(index)
+            if tab.unsaved:
+                tab.save()
 
         try:
             self.archive.save(path)
@@ -454,6 +456,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.tabs.widget(index).save()
 
+    def save_all_editors(self):
+        for i in range(self.tabs.count()):
+            self.tabs.widget(i).save()
+
     def add_file(self):
         file = QFileDialog.getOpenFileName(self, "Add file", self.settings.last_dir)[0]
         if not file:
@@ -561,26 +567,26 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 if ret == QMessageBox.StandardButton.YesToAll:
                     skip_all = True
 
-            deleted.append((name, preview_name(name)))
+            deleted.append(name)
             self.archive.remove_file(name)
 
         if not deleted:
             return
 
         for i in reversed(range(self.tabs.count())):
-            name = self.tabs.tabText(i)
-            if (name in t for t in deleted):
+            tab: GenericTab = self.tabs.widget(i)
+            if tab.name in deleted:
                 self.tabs.remove_tab(i)
 
-        self.listwidget.remove_files([x[0] for x in deleted])
+        self.listwidget.remove_files(deleted)
         QMessageBox.information(self, "Done", "File selection has been deleted")
 
     def clear_preview(self):
         if self.tabs.count() < 0:
             return
 
-        name = self.tabs.tabText(0)
-        if is_preview(name):
+        tab: GenericTab = self.tabs.widget(0)
+        if tab.preview:
             self.remove_file_tab(0)
 
     def copy_name(self):
@@ -606,8 +612,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
 
         for i in reversed(range(self.tabs.count())):
-            tab_name = self.tabs.tabText(i)
-            if tab_name in (preview_name(name), name):
+            tab: GenericTab = self.tabs.widget(i)
+            if tab.name == name:
                 self.tabs.remove_tab(i)
 
         self.archive.add_file(name, self.archive.read_file(original_name))
@@ -693,22 +699,25 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.settings.last_dir = path
         QMessageBox.information(self, "Done", "Filtered files have been extracted")
 
-    def _find_tab_index(self, name: str):
+    def _find_tab_index(self, name: str, preview: bool):
         for x in range(self.tabs.count()):
-            if self.tabs.tabText(x) == name:
+            tab: GenericTab = self.tabs.widget(x)
+            if tab.name == name and (tab.preview == preview or preview is None):
                 return x
 
         return -1
 
     def _create_tab(self, name: str, preview: bool = False):
+        first_tab: GenericTab = self.tabs.widget(0)
+
         if preview:
-            if self.tabs.count() > 0 and self.tabs.tabText(0) == preview_name(name):
+            if first_tab and first_tab.name == name:
                 self.tabs.setCurrentIndex(0)
                 return
 
             tab = get_tab_from_file_type(name)(self, self.archive, name, preview)
             tab.generate_preview()
-            if is_preview(self.tabs.tabText(0)) and self.tabs.currentIndex() >= 0:
+            if first_tab and first_tab.preview and self.tabs.currentIndex() >= 0:
                 self.remove_file_tab(0)
 
             self.tabs.insertTab(0, tab, preview_name(name))
@@ -717,7 +726,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
         else:
             for i in range(self.tabs.count()):
-                if self.tabs.tabText(i) == name:
+                existing_tab: GenericTab = self.tabs.widget(i)
+                if existing_tab.name == name and not existing_tab.preview:
                     self.tabs.setCurrentIndex(i)
                     return
 
@@ -731,12 +741,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             index = self.tabs.count() - 1
             self.tabs.setTabToolTip(index, name)
             self.tabs.setCurrentIndex(index)
-            if self.tabs.tabText(0) == preview_name(name):
+            if first_tab and first_tab.preview and first_tab.name == name:
                 self.remove_file_tab(0)
 
     def file_double_clicked(self, _):
         name = self.listwidget.active_list.currentItem().text()
-        idx = self._find_tab_index(name)
+        idx = self._find_tab_index(name, preview=False)
         if idx != -1:
             self.tabs.setCurrentIndex(idx)
         else:
@@ -747,7 +757,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
 
         name = self.listwidget.active_list.currentItem().text()
-        idx = self._find_tab_index(name)
+        idx = self._find_tab_index(name, preview=None)
         if idx != -1:
             self.tabs.setCurrentIndex(idx)
         else:
@@ -761,7 +771,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.close_tab(index)
 
     def close_tab(self, index):
-        if is_unsaved(self.tabs.tabText(index)):
+        tab: GenericTab = self.tabs.widget(index)
+        if tab.unsaved:
             ret = QMessageBox.question(
                 self,
                 "Close unsaved?",
@@ -775,7 +786,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 return
 
             if ret == QMessageBox.StandardButton.Yes:
-                self.tabs.widget(index).save()
+                tab.save()
 
         self.remove_file_tab(index)
 
@@ -783,7 +794,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not self.archive:
             return True
 
-        unsaved_tabs = any(is_unsaved(self.tabs.tabText(i)) for i in range(self.tabs.count()))
+        unsaved_tabs = any(self.tabs.widget(i).unsaved for i in range(self.tabs.count()))
         if self.archive.modified_entries or unsaved_tabs:
             ret = QMessageBox.question(
                 self,

@@ -281,6 +281,12 @@ class CustomHeroTab(GenericTab):
         if not self.preview:
             self.show_edit_warning()
 
+        for line_edit in [self.name_edit, self.color1_edit, self.color2_edit, self.color3_edit]:
+            line_edit.textChanged.connect(self.become_unsaved)
+
+        self.powers_table.cellChanged.connect(self.become_unsaved)
+        self.blings_table.cellChanged.connect(self.become_unsaved)
+
     def generate_preview(self):
         self.generate_layout()
         self.set_layout_read_only(self.layout())
@@ -323,6 +329,7 @@ class CustomHeroTab(GenericTab):
             # Generate bytes and save
             cah_bytes = self.hero.write()
             self.archive.edit_file(self.name, cah_bytes)
+            super().save()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 

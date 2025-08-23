@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QWidget
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from utils.utils import human_readable_size
+from utils.utils import human_readable_size, unsaved_name
 
 if TYPE_CHECKING:
     from main import MainWindow
@@ -55,6 +55,7 @@ class GenericTab(QWidget):
         self.tmp = None
 
         self.preview = preview
+        self.unsaved = False
 
     def generate_layout(self):
         layout = QHBoxLayout()
@@ -70,8 +71,19 @@ class GenericTab(QWidget):
     def generate_preview(self):
         self.generate_layout()
 
+    def become_unsaved(self):
+        if self.unsaved:
+            return
+        
+        self.unsaved = True
+        self.main.tabs.setTabText(self.main.tabs.currentIndex(), unsaved_name(self.name))
+
     def save(self):
-        pass
+        if not self.unsaved:
+            return
+        
+        self.unsaved = False
+        self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
 
     def gather_files(self) -> list:
         return [self.name]

@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
+from misc import SearchBox
 from tabs.generic_tab import GenericTab
 from utils.keywords import BEHAVIORS, CODEBLOCKS, KEYWORDS, SINGLETONS
 from utils.utils import SEARCH_HISTORY_MAX, decode_string, encode_string, unsaved_name
@@ -302,37 +303,37 @@ class Editor(QsciScintilla):
         self.SendScintilla(QsciScintilla.SCI_SETADDITIONALSELECTIONTYPING, True)
 
         self.file_type = os.path.splitext(file_name)[1].lower()
-        self.lexer = DefaultLexer(self, dark_mode)
+        self.text_lexer = DefaultLexer(self, dark_mode)
         if self.file_type == ".lua":
-            self.lexer = QsciLexerLua(self)
+            self.text_lexer = QsciLexerLua(self)
         elif self.file_type == ".xml":
-            self.lexer = QsciLexerXML(self)
+            self.text_lexer = QsciLexerXML(self)
         elif self.file_type in (".ini", ".inc"):
-            self.lexer = LexerBFME(self, dark_mode)
+            self.text_lexer = LexerBFME(self, dark_mode)
 
-        self.setLexer(self.lexer)
+        self.setLexer(self.text_lexer)
 
         self.commenter = Commenter(self, ";")
         QShortcut(QKeySequence("Ctrl+;"), self, self.commenter.toggle_comments)
 
     def toggle_highlighting(self, state):
-        if not isinstance(self.lexer, QsciLexerCustom):
+        if not isinstance(self.text_lexer, QsciLexerCustom):
             return
 
-        self.lexer.toggled = state
+        self.text_lexer.toggled = state
         if state:
-            self.lexer.styleText(0, len(self.text()))
+            self.text_lexer.styleText(0, len(self.text()))
         else:
-            self.lexer.startStyling(0)
-            self.lexer.setStyling(len(self.text()), 0)
+            self.text_lexer.startStyling(0)
+            self.text_lexer.setStyling(len(self.text()), 0)
 
     def toggle_dark_mode(self, state):
-        if not isinstance(self.lexer, QsciLexerCustom):
+        if not isinstance(self.text_lexer, QsciLexerCustom):
             return
 
-        self.lexer.dark_mode = state
-        self.lexer.update_colors()
-        self.toggle_highlighting(self.lexer.toggled)
+        self.text_lexer.dark_mode = state
+        self.text_lexer.update_colors()
+        self.toggle_highlighting(self.text_lexer.toggled)
 
 
 class TextTab(GenericTab):
@@ -342,7 +343,7 @@ class TextTab(GenericTab):
 
         string = decode_string(self.data, self.main.settings.encoding)
         self.text_widget.setText(string)
-        self.text_widget.textChanged.connect(self.text_changed)
+        self.text_widget.textChanged.connect(self.become_unsaved)
 
         layout.addWidget(self.text_widget)
 
@@ -360,7 +361,7 @@ class TextTab(GenericTab):
             search_layout.addWidget(highlighting)
             highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
 
-        self.search = QComboBox(self)
+        self.search = SearchBox(self, enter_callback=self.main.search_file)
         self.search.setEditable(True)
         completer = self.search.completer()
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
@@ -423,7 +424,5 @@ class TextTab(GenericTab):
 
         string = encode_string(data, self.main.settings.encoding)
         self.archive.edit_file(self.name, string)
-        self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
-
-    def text_changed(self):
-        self.main.tabs.setTabText(self.main.tabs.currentIndex(), unsaved_name(self.name))
+        
+        super().save()
