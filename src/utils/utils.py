@@ -5,9 +5,26 @@ SEARCH_HISTORY_MAX = 20
 RECENT_FILES_MAX = 10
 HELP_STRING = """
 <h2>Shortcuts</h2>
+<h3>In File List</h3>
 <ul>
-    {shortcuts}
-</ul> 
+    <li><b>Click on file</b> - Preview file</li>
+    <li><b>Double-click on file</b> - Edit file</li>
+    <li><b>Left-click drag</b> - Select multiple files</li>
+    <li><b>Right-click on file/selection</b> - Context menu</li>
+</ul>
+<ul>
+    <li><b>CTRL+F</b> - Focus search box</li>
+</ul>
+<h3>In Text Tab</h3>
+<ul>
+    <li><b>CTRL+;</b> - Comment/uncomment the currently selected text</li>
+</ul>
+<h3>In W3D Tab</h3>
+<ul>
+    <li><b>Arrow keys</b> - Rotate a model in a w3d tab</li>
+    <li><b>Mouse wheel</b> - Zoom a model in and out in a w3d tab</li>
+    <li><b>Mouse drag</b> - Rotate a model in a w3d tab</li>
+</ul>
 
 <h2> File Search </h2>
 File search is based on Unix filename pattern. This means that something like 

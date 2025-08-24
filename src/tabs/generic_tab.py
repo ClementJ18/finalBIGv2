@@ -74,16 +74,19 @@ class GenericTab(QWidget):
     def become_unsaved(self):
         if self.unsaved:
             return
-        
+
         self.unsaved = True
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), unsaved_name(self.name))
 
     def save(self):
         if not self.unsaved:
             return
-        
+
         self.unsaved = False
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
+
+    def search(self):
+        pass
 
     def gather_files(self) -> list:
         return [self.name]

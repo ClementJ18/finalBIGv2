@@ -304,13 +304,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.tab_current_index = self.listwidget.currentIndex()
 
     def show_help(self):
-        string = HELP_STRING.format(
-            shortcuts="\n".join(
-                f"<li><b>{s[0] if isinstance(s[0], str) else s[0].key().toString()}</b> - {s[1]} </li>"
-                for s in self.shortcuts
-            )
-        )
-        QMessageBox.information(self, "Help", string)
+        QMessageBox.information(self, "Help", HELP_STRING)
 
     def show_about(self):
         QMessageBox.information(self, "About", ABOUT_STRING.format(version=__version__))

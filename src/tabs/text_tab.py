@@ -361,16 +361,16 @@ class TextTab(GenericTab):
             search_layout.addWidget(highlighting)
             highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
 
-        self.search = SearchBox(self, enter_callback=self.main.search_file)
-        self.search.setEditable(True)
-        completer = self.search.completer()
+        self.search_box = SearchBox(self, enter_callback=self.search)
+        self.search_box.setEditable(True)
+        completer = self.search_box.completer()
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
-        self.search.setCompleter(completer)
-        search_layout.addWidget(self.search, stretch=5)
+        self.search_box.setCompleter(completer)
+        search_layout.addWidget(self.search_box, stretch=5)
 
         self.search_button = QPushButton(self)
         self.search_button.setText("Search current file")
-        self.search_button.clicked.connect(self.search_file)
+        self.search_button.clicked.connect(self.search)
         search_layout.addWidget(self.search_button)
 
         self.regex_box = QCheckBox("Regex")
@@ -392,8 +392,8 @@ class TextTab(GenericTab):
         self.generate_layout()
         self.text_widget.setReadOnly(True)
 
-    def search_file(self):
-        search = self.search.currentText()
+    def search(self):
+        search = self.search_box.currentText()
         regex = self.regex_box.isChecked()
         case = self.case_box.isChecked()
         whole = self.whole_box.isChecked()
@@ -406,14 +406,14 @@ class TextTab(GenericTab):
             self.text_widget.findNext()
 
         if search and not any(
-            self.search.itemText(x) == search for x in range(self.search.count())
+            self.search_box.itemText(x) == search for x in range(self.search_box.count())
         ):
-            self.search.addItem(search)
+            self.search_box.addItem(search)
 
-        if self.search.count() > SEARCH_HISTORY_MAX:
-            self.search.removeItem(0)
+        if self.search_box.count() > SEARCH_HISTORY_MAX:
+            self.search_box.removeItem(0)
 
-        self.search.setFocus()
+        self.search_box.setFocus()
 
     def save(self):
         if self.external:
@@ -424,5 +424,5 @@ class TextTab(GenericTab):
 
         string = encode_string(data, self.main.settings.encoding)
         self.archive.edit_file(self.name, string)
-        
+
         super().save()

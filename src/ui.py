@@ -103,30 +103,6 @@ def create_ui(main: "MainWindow", basedir: str):
     main.setCentralWidget(widget)
 
 
-def create_shortcuts(main: "MainWindow"):
-    main.shortcuts = [
-        ("Click on file", "Preview file"),
-        ("Double-click on file", "Edit file"),
-        ("Left-click drag", "Select multiple files"),
-        ("Right-click on file/selection", "Context menu"),
-        (
-            QShortcut(QKeySequence("CTRL+F"), main, main.search_file),
-            "Search the current text editor",
-        ),
-        (
-            QShortcut(QKeySequence("CTRL+W"), main, main.close_tab_shortcut),
-            "Close the current tab",
-        ),
-        (
-            "CTRL+;",
-            "Comment/uncomment the currently selected text",
-        ),
-        ("Arrow keys", "Rotate a model in a w3d tab"),
-        ("Mouse wheel", "Zoom a model in and out in a w3d tab"),
-        ("Mouse drag", "Rotate a model in a w3d tab"),
-    ]
-
-
 def create_menu(main: "MainWindow"):
     menu = main.menuBar()
     file_menu = menu.addMenu("&File")
@@ -171,6 +147,9 @@ def create_menu(main: "MainWindow"):
 
     save_all_editors_action = edit_menu.addAction("Save all &tabs", main.save_all_editors)
     save_all_editors_action.setShortcut(QKeySequence("ALT+SHIFT+S"))
+
+    close_editor_action = edit_menu.addAction("&Close current tab", main.close_tab)
+    close_editor_action.setShortcut(QKeySequence("CTRL+W"))
 
     edit_menu.addSeparator()
 
@@ -245,5 +224,4 @@ def create_menu(main: "MainWindow"):
 
 def generate_ui(main: "MainWindow", basedir: str):
     create_ui(main, basedir)
-    create_shortcuts(main)
     create_menu(main)

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
 from misc import ArchiveSearchThread
+from tabs.generic_tab import GenericTab
 from utils.utils import SEARCH_HISTORY_MAX
 
 if TYPE_CHECKING:
@@ -57,9 +58,8 @@ class SearchManager:
         if index < 0:
             return
 
-        widget = self.tabs.widget(index)
-        if hasattr(widget, "search_file"):
-            widget.search_file()
+        widget: GenericTab = self.tabs.widget(index)
+        widget.search()
 
     def filter_list(self: "MainWindow"):
         search = self.search.currentText().strip()
