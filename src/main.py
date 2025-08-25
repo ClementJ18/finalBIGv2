@@ -243,9 +243,6 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         return True
 
     def _new(self):
-        if not self.close_archive():
-            return
-
         formats_map = {
             "BIG4 (for BFME games)": "BIG4",
             "BIGF (for C&C Generals)": "BIGF",
@@ -254,10 +251,14 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         item, ok = QInputDialog.getItem(
             self, "New Archive", "Select archive format:", list(formats_map.keys()), 0, False
         )
+
         if not ok:
-            self.close_archive()
             return
 
+        if not self.close_unsaved():
+            return
+
+        self.close_archive()
         header = formats_map[item]
         if self.settings.large_archive:
             temp_path = tempfile.NamedTemporaryFile(delete=False).name
@@ -419,19 +420,16 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         return files_added
 
     def new(self):
-        if not self.close_unsaved():
-            return
-
         self._new()
 
     def open(self):
-        if not self.close_unsaved():
-            return
-
         file = QFileDialog.getOpenFileName(
             self, "Open file", self.settings.last_dir, "Big files (*.big);;All files (*)"
         )[0]
         if not file:
+            return
+
+        if not self.close_unsaved():
             return
 
         self.settings.last_dir = os.path.dirname(file)
