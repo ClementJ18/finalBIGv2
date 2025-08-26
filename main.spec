@@ -8,7 +8,7 @@ a = Analysis(
     ['src/main.py'],
     pathex=[],
     binaries=[],
-    datas=[('./src/icon.ico','.'), ('./src/new_tab.png', '.')],
+    datas=[('./src/assets/*', 'assets'),],
     hiddenimports=["PyQt6.sip", "PyQt6.QtPrintSupport"],
     hookspath=[],
     runtime_hooks=[],
@@ -40,5 +40,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="./src/icon.ico"
+    icon="./src/assets/icon.ico"
 )
