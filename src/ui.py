@@ -148,7 +148,7 @@ def create_menu(main: "MainWindow"):
     save_all_editors_action = edit_menu.addAction("Save all &tabs", main.save_all_editors)
     save_all_editors_action.setShortcut(QKeySequence("ALT+SHIFT+S"))
 
-    close_editor_action = edit_menu.addAction("&Close current tab", main.close_tab)
+    close_editor_action = edit_menu.addAction("&Close current tab", main.close_tab_shortcut)
     close_editor_action.setShortcut(QKeySequence("CTRL+W"))
 
     edit_menu.addSeparator()

@@ -486,6 +486,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         ret = self.add_file_to_archive(url, name, blank)
         if ret != QMessageBox.StandardButton.No:
             self.listwidget.add_files([name])
+            self.refresh_tabs([name])
 
     def _add_folder(self, url):
         skip_all = False
@@ -754,6 +755,13 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.tabs.setCurrentIndex(idx)
         else:
             self._create_tab(name, preview=True)
+
+    def refresh_tabs(self, files: list[str]):
+        for i in range(self.tabs.count()):
+            tab: GenericTab = self.tabs.widget(i)
+            if tab.name in files:
+                self.remove_file_tab(i)
+                self._create_tab(tab.name, preview=tab.preview)
 
     def close_tab_shortcut(self):
         index = self.tabs.currentIndex()
