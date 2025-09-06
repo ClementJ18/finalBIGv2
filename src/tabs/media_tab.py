@@ -1,5 +1,4 @@
 import os
-import shutil
 import tempfile
 
 from PyQt6.QtCore import Qt, QTimer, QUrl
