@@ -44,7 +44,7 @@ from utils.utils import (
     resource_path,
 )
 
-__version__ = "0.12.0"
+__version__ = "0.12.1"
 
 basedir = os.path.dirname(__file__)
 
