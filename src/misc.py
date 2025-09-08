@@ -98,7 +98,7 @@ class FileList(QListWidget):
         self.installEventFilter(self)
 
     def eventFilter(self, source: QObject, event: QEvent):
-        if source is self and event.type() == QEvent.Type.KeyPress:
+        if source is self and event.type() == QEvent.Type.KeyRelease:
             if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down):
                 current = self.currentItem()
                 if current:

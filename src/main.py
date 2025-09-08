@@ -37,8 +37,6 @@ from ui import HasUiElements, generate_ui
 from utils.utils import (
     ABOUT_STRING,
     HELP_STRING,
-    is_preview,
-    is_unsaved,
     normalize_name,
     preview_name,
     resource_path,

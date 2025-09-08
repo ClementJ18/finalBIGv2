@@ -1,5 +1,6 @@
-import sys
 import os
+import sys
+
 keywords = set()
 behaviors = set()
 
@@ -14,7 +15,7 @@ for path, directories, files in os.walk(sys.argv[1]):
 
                 stuff = line.split("=")[0].strip()
                 if any(x in stuff for x in [";", "//", "~", " "]) or stuff.isdigit():
-                    continue 
+                    continue
 
                 if stuff == "Behavior":
                     behavior = line.split()[2].strip()
