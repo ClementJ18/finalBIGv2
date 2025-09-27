@@ -88,6 +88,14 @@ class Settings:
     def preview_enabled(self, value: bool) -> None:
         self.set_value("settings/preview", int(value))
 
+    @property
+    def smart_replace_enabled(self) -> bool:
+        return self.get_bool("settings/smart_replace", False)
+
+    @smart_replace_enabled.setter
+    def smart_replace_enabled(self, value: bool) -> None:
+        self.set_value("settings/smart_replace", int(value))
+
     def recent_files(self) -> list[str]:
         files = self._settings.value("history/recent_files", [], type=list)
         return [f for f in files if os.path.exists(f)]
@@ -153,3 +161,6 @@ class Settings:
 
     def toggle_external(self):
         self.external = self.main.use_external_action.isChecked()
+
+    def toggle_smart_replace(self):
+        self.smart_replace_enabled = self.main.smart_replace_action.isChecked()

@@ -34,6 +34,7 @@ class HasUiElements:
     dark_mode_action: QAction
     use_external_action: QAction
     large_archive_action: QAction
+    smart_replace_action: QAction
     preview_action: QAction
     lock_exceptions: list
 
@@ -211,6 +212,15 @@ def create_menu(main: "MainWindow"):
     main.large_archive_action.triggered.connect(main.settings.toggle_large_archives)
     option_menu.addAction(main.large_archive_action)
     main.lock_exceptions.append(main.large_archive_action)
+
+    main.smart_replace_action = QAction("&Smart Replace?", main, checkable=True)
+    main.smart_replace_action.setToolTip(
+        "Try to figure out which file the user is trying to replace"
+    )
+    main.smart_replace_action.setChecked(main.settings.smart_replace_enabled)
+    main.smart_replace_action.triggered.connect(main.settings.toggle_smart_replace)
+    option_menu.addAction(main.smart_replace_action)
+    main.lock_exceptions.append(main.smart_replace_action)
 
     main.preview_action = QAction("&Preview?", main, checkable=True)
     main.preview_action.setToolTip("Enable Previewing files")
