@@ -471,23 +471,23 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def _add_file(self, url, *, blank=False, ask_name=True):
         name = normalize_name(url)
+        if self.settings.smart_replace_enabled:
+            files = self.archive.file_list()
+            name_components = name.split("\\")
+            complete_component = name_components.pop()
+            for component in reversed(name_components):
+                filtered_files = [f for f in files if f.endswith(complete_component)]
+                if not filtered_files:
+                    break
+
+                name = filtered_files[0]
+                if len(filtered_files) == 1:
+                    break
+
+                files = filtered_files
+                complete_component = f"{component}\\{complete_component}"
+
         if ask_name:
-            if self.settings.smart_replace_enabled:
-                files = self.archive.file_list()
-                name_components = name.split("\\")
-                complete_component = name_components.pop()
-                for component in reversed(name_components):
-                    filtered_files = [f for f in files if f.endswith(complete_component)]
-                    if not filtered_files:
-                        break
-
-                    name = filtered_files[0]
-                    if len(filtered_files) == 1:
-                        break
-
-                    files = filtered_files
-                    complete_component = f"{component}\\{complete_component}"
-
             name, ok = QInputDialog.getText(
                 self,
                 "Filename",
@@ -497,10 +497,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             if not ok or not name:
                 return False
 
-        ret = self.add_file_to_archive(url, name, blank)
+        ret = self.add_file_to_archive(url, name, blank, skip_all=not ask_name)
         if ret != QMessageBox.StandardButton.No:
             self.listwidget.add_files([name])
             self.refresh_tabs([name])
+
+        return ret
 
     def _add_folder(self, url):
         skip_all = False
@@ -864,6 +866,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
     def dropEvent(self, event: QDropEvent):
         md = event.mimeData()
         if md.hasUrls():
+            yes_to_all = False
             for url in md.urls():
                 local_file = url.toLocalFile()
                 if local_file.endswith(".big"):
@@ -871,9 +874,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     break
 
                 if os.path.isfile(local_file):
-                    self._add_file(local_file)
+                    ret = self._add_file(local_file, ask_name=not yes_to_all)
                 else:
-                    self._add_folder(local_file)
+                    ret = self._add_folder(local_file)
+
+                if ret == QMessageBox.StandardButton.YesToAll:
+                    yes_to_all = True
 
             event.acceptProposedAction()
 
