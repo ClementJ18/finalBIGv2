@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from misc import FileList
+from misc import FileList, WrappingInputDialog
 from search import SearchManager
 from settings import Settings
 from tabs import get_tab_from_file_type
@@ -488,11 +488,11 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 complete_component = f"{component}\\{complete_component}"
 
         if ask_name:
-            name, ok = QInputDialog.getText(
+            name, ok = WrappingInputDialog.getText(
                 self,
                 "Filename",
                 "Save the file under the following name:",
-                text=name,
+                name,
             )
             if not ok or not name:
                 return False
@@ -611,8 +611,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         original_name = self.listwidget.active_list.currentItem().text()
 
-        name, ok = QInputDialog.getText(
-            self, "Filename", f"Rename {original_name} as:", text=original_name
+        name, ok = WrappingInputDialog.getText(
+            self, "Filename", f"Rename {original_name} as:", original_name
         )
         if not ok:
             return
