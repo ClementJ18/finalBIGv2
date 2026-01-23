@@ -60,8 +60,9 @@ def create_ui(main: "MainWindow", basedir: str):
     layout.addWidget(search_widget, stretch=1)
     search_widget.setLayout(search_layout)
 
-    main.search = SearchBox(main, enter_callback=main.filter_list)
-    main.search.setEditable(True)
+    main.search = SearchBox(
+        main, enter_callback=main.filter_list, placeholder_text="Search file list..."
+    )
     completer = main.search.completer()
     completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
     main.search.setCompleter(completer)

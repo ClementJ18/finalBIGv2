@@ -740,6 +740,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     self.tabs.setCurrentIndex(i)
                     return
 
+            if first_tab and first_tab.preview and first_tab.name == name:
+                self.remove_file_tab(0)
+
             tab = get_tab_from_file_type(name)(self, self.archive, name, preview)
             if self.settings.external:
                 tab.open_externally()
@@ -750,8 +753,6 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             index = self.tabs.count() - 1
             self.tabs.setTabToolTip(index, name)
             self.tabs.setCurrentIndex(index)
-            if first_tab and first_tab.preview and first_tab.name == name:
-                self.remove_file_tab(0)
 
     def file_double_clicked(self, _):
         name = self.listwidget.active_list.currentItem().text()

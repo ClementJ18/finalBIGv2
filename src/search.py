@@ -17,7 +17,7 @@ class SearchManager:
         search, ok = QInputDialog.getText(
             self,
             "Search archive",
-            f"This will search through the currently filtered list. Search keyword{' (Regex)' if regex else ''}:",
+            f"This will search through the file list. Search keyword{' (Regex)' if regex else ''}:",
         )
         if not ok:
             return
@@ -26,9 +26,7 @@ class SearchManager:
             matches = returned[0]
             for x in range(self.listwidget.active_list.count()):
                 item = self.listwidget.active_list.item(x)
-
-                if not item.isHidden():
-                    item.setHidden(item.text() not in matches)
+                item.setHidden(item.text() not in matches)
 
             self.message_box.done(1)
             QMessageBox.information(

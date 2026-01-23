@@ -126,12 +126,24 @@ class GenericTab(QWidget):
             save_btn = QPushButton("Save")
             save_btn.clicked.connect(self.save)
             controls_layout.addWidget(save_btn)
+        else:
+            edit_btn = QPushButton("Edit")
+            edit_btn.clicked.connect(self.edit)
+            controls_layout.addWidget(edit_btn)
 
         controls_layout.addStretch()
 
         controls_widget = QWidget()
         controls_widget.setLayout(controls_layout)
         return controls_widget
+
+    def edit(self):
+        name = self.main.listwidget.active_list.currentItem().text()
+        idx = self.main._find_tab_index(name, preview=False)
+        if idx != -1:
+            self.main.tabs.setCurrentIndex(idx)
+        else:
+            self.main._create_tab(name, preview=False)
 
     def deleteLater(self):
         if self.observer is not None:

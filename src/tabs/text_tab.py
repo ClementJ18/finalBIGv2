@@ -14,6 +14,8 @@ from utils.utils import SEARCH_HISTORY_MAX, decode_string, encode_string
 KEYWORDS_PATTERN = re.compile(f"^({'|'.join(KEYWORDS)})$")
 BEHAVIORS_PATTERN = re.compile(f"^({'|'.join(BEHAVIORS)})$")
 
+scroll = {}
+
 
 class Commenter:
     def __init__(self, sci, comment_str):
@@ -340,10 +342,10 @@ class TextTab(GenericTab):
     def generate_layout(self):
         layout = QVBoxLayout()
         self.text_widget = Editor(self.name, self.main.settings.dark_mode)
-
         string = decode_string(self.data, self.main.settings.encoding)
         self.text_widget.setText(string)
         self.text_widget.textChanged.connect(self.become_unsaved)
+        self.restore_scroll_position()
 
         layout.addWidget(self.text_widget)
 
@@ -361,8 +363,9 @@ class TextTab(GenericTab):
             search_layout.addWidget(highlighting)
             highlighting.stateChanged.connect(self.text_widget.toggle_highlighting)
 
-        self.search_box = SearchBox(self, enter_callback=self.search)
-        self.search_box.setEditable(True)
+        self.search_box = SearchBox(
+            self, enter_callback=self.search, placeholder_text="Search in file..."
+        )
         completer = self.search_box.completer()
         completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
         self.search_box.setCompleter(completer)
@@ -414,6 +417,27 @@ class TextTab(GenericTab):
             self.search_box.removeItem(0)
 
         self.search_box.setFocus()
+
+    def save_scroll_position(self):
+        first_visible_line = self.text_widget.firstVisibleLine()
+        horizontal_scroll = self.text_widget.SendScintilla(QsciScintilla.SCI_GETXOFFSET)
+        scroll[self.name] = (first_visible_line, horizontal_scroll)
+
+    def restore_scroll_position(self):
+        if self.name in scroll:
+            first_visible_line, horizontal_scroll = scroll.pop(self.name)
+            self.text_widget.SendScintilla(
+                QsciScintilla.SCI_SETFIRSTVISIBLELINE, first_visible_line
+            )
+            self.text_widget.SendScintilla(QsciScintilla.SCI_SETXOFFSET, horizontal_scroll)
+
+    def deleteLater(self):
+        self.save_scroll_position()
+        return super().deleteLater()
+
+    def edit(self):
+        self.save_scroll_position()
+        return super().edit()
 
     def save(self):
         if self.external:

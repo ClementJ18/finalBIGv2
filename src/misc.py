@@ -22,9 +22,13 @@ if TYPE_CHECKING:
 
 
 class SearchBox(QComboBox):
-    def __init__(self, *args, enter_callback=None, **kwargs):
+    def __init__(self, *args, enter_callback=None, placeholder_text="Search...", **kwargs):
         super().__init__(*args, **kwargs)
         self.enter_callback = enter_callback
+        self.setEditable(True)
+
+        if placeholder_text:
+            self.lineEdit().setPlaceholderText(placeholder_text)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
