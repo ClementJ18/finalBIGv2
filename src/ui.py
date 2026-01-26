@@ -128,6 +128,11 @@ def create_menu(main: "MainWindow"):
     file_menu.addMenu(main.recent_menu)
     main.update_recent_files_menu()
 
+    file_menu.addAction("&Save Workspace", main.save_workspace)
+
+    open_workspace_action = file_menu.addAction("Open &Workspace", main.open_workspace)
+    main.lock_exceptions.append(open_workspace_action)
+
     edit_menu = menu.addMenu("&Edit")
     new_file_action = edit_menu.addAction("&New File", main.new_file)
     new_file_action.setShortcut(QKeySequence("CTRL+SHIFT+N"))

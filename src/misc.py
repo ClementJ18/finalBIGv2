@@ -9,9 +9,11 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QInputDialog,
     QLabel,
     QListWidget,
     QMenu,
+    QPushButton,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
@@ -217,7 +219,6 @@ class FileListTabs(TabWidget):
             self.create_favorite_tab()
 
         self.add_files_to_tab(self.favorite_list, files)
-        self.setCurrentIndex(0)
 
     def remove_favorites(self, files: List[str]):
         self.remove_files_from_tab(self.favorite_list, files)
@@ -296,3 +297,19 @@ class WrappingInputDialog(QDialog):
         text = dialog.textEdit.toPlainText().strip()
         ok = result == QDialog.DialogCode.Accepted
         return text, ok
+
+
+class WorkspaceDialog(QInputDialog):
+    def __init__(self, parent: "MainWindow" = None, workspaces: List[str] = []):
+        super().__init__(parent)
+        self.setWindowTitle("Workspace Management")
+        self.setLabelText("Select a workspace to open:")
+        self.setComboBoxItems(workspaces)
+        self.setOption(QInputDialog.InputDialogOption.UseListViewForComboBoxItems)
+
+        delete_button = QPushButton("Delete Workspace")
+        delete_button.clicked.connect(lambda: parent.delete_workspace(self))
+        button_box: QDialogButtonBox = self.findChild(QDialogButtonBox)
+        button_box.addButton(delete_button, QDialogButtonBox.ButtonRole.ActionRole)
+
+        self.workspaces = workspaces

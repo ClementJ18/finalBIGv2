@@ -2,11 +2,15 @@ import os
 import sys
 import tempfile
 import traceback
+import webbrowser
+from datetime import datetime
 from typing import cast
 
+import moddb
 import qdarktheme
+from moddb.errors import ModdbException
 from pyBIG import InDiskArchive, InMemoryArchive, base_archive
-from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtCore import QEvent, Qt, QTimer
 from PyQt6.QtGui import (
     QAction,
     QCloseEvent,
@@ -28,7 +32,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from misc import FileList, WrappingInputDialog
+from misc import FileList, WorkspaceDialog, WrappingInputDialog
 from search import SearchManager
 from settings import Settings
 from tabs import get_tab_from_file_type
@@ -42,7 +46,7 @@ from utils.utils import (
     resource_path,
 )
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 basedir = os.path.dirname(__file__)
 
@@ -95,6 +99,167 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self._open(path_arg)
 
         self.showMaximized()
+        QTimer.singleShot(1000, self.post_init)
+
+    def post_init(self):
+        self.check_for_updates()
+
+    def check_for_updates(self):
+        if self.settings.update_last_checked is not None:
+            delta = datetime.now() - self.settings.update_last_checked
+            if delta.days < 3:
+                return
+
+        self.settings.update_last_checked = datetime.now()
+
+        try:
+            r: moddb.File = moddb.parse_page(
+                "https://www.moddb.com/games/battle-for-middle-earth-ii/downloads/finalbigv2"
+            )
+        except ModdbException:
+            return
+
+        latest_version = r.name.split("-")[-1].strip()
+        if self.settings.ignore_version_update == latest_version:
+            return
+
+        if latest_version != __version__:
+            msg = QMessageBox(
+                QMessageBox.Icon.Information,
+                "Update Available",
+                f"A new version of FinalBIGv2 is available: {latest_version}\nYou are currently using version: {__version__}\n\nWould you like to visit the download page?",
+                parent=self,
+            )
+            msg.addButton(QPushButton("Yes"), QMessageBox.ButtonRole.YesRole)
+            msg.addButton(QPushButton("Ignore this version"), QMessageBox.ButtonRole.NoRole)
+            msg.addButton(QPushButton("No"), QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+
+            if msg.clickedButton().text() == "Ignore this version":
+                self.settings.ignore_version_update = latest_version
+            elif msg.clickedButton().text() == "Yes":
+                webbrowser.open(
+                    "https://www.moddb.com/games/battle-for-middle-earth-ii/downloads/finalbigv2"
+                )
+
+    def delete_workspace(self, dialog: WorkspaceDialog):
+        workspace_name = dialog.textValue()
+        ret = QMessageBox.question(
+            self,
+            "Delete Workspace?",
+            f"Are you sure you want to delete the workspace <b>{workspace_name}</b>?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ret == QMessageBox.StandardButton.Yes:
+            self.settings.delete_workspace(workspace_name)
+            dialog.workspaces.remove(workspace_name)
+            if not dialog.workspaces:
+                dialog.reject()
+                return
+
+            dialog.setComboBoxItems(dialog.workspaces)
+
+    def open_workspace(self):
+        workspaces = self.settings.list_workspaces()
+        if not workspaces:
+            QMessageBox.information(
+                self,
+                "No Workspaces",
+                "No workspaces have been saved yet. Please save a workspace first.",
+            )
+            return
+
+        dialog = WorkspaceDialog(self, workspaces)
+        if dialog.exec() != QInputDialog.DialogCode.Accepted:
+            return
+
+        workspace_name = dialog.textValue()
+        workspace_data = self.settings.get_workspace(workspace_name)
+        archive_path = workspace_data.get("archive_path")
+        if not archive_path or not os.path.exists(archive_path):
+            QMessageBox.warning(
+                self,
+                "Error",
+                "The archive path stored in this workspace does not exist. Please open the archive manually.",
+            )
+            return
+
+        if not self.close_unsaved():
+            return
+
+        if not self._open(archive_path):
+            return
+
+        self.restore_workspace(workspace_data)
+
+    def save_workspace(self):
+        workspace_name, ok = QInputDialog.getText(
+            self,
+            "Save Workspace",
+            "Enter a name for the workspace:",
+            text="MyWorkspace",
+        )
+
+        if not ok or not workspace_name:
+            return
+
+        if self.settings.workspace_exists(workspace_name):
+            ret = QMessageBox.question(
+                self,
+                "Overwrite Workspace?",
+                f"A workspace named <b>{workspace_name}</b> already exists. Overwrite?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if ret == QMessageBox.StandardButton.No:
+                return
+
+        workspace_data = {
+            "archive_path": self.path,
+            "tabs": [],
+            "lists": {},
+            "version": self.settings.workspace_version,
+        }
+        for i in range(self.tabs.count()):
+            tab: GenericTab = self.tabs.widget(i)
+            workspace_data["tabs"].append(tab.name)
+
+        for i in range(self.listwidget.count() - 1):
+            tab: FileList = self.listwidget.widget(i)
+            workspace_data["lists"][self.listwidget.tabText(i)] = {
+                "files": [tab.item(x).text() for x in range(tab.count())],
+                "is_favorite": tab.is_favorite,
+            }
+
+        self.settings.save_workspace(workspace_name, workspace_data)
+        QMessageBox.information(
+            self, "Workspace Saved", f"Workspace <b>{workspace_name}</b> has been saved."
+        )
+
+    def restore_workspace(self, data: dict):
+        version = int(data["version"])
+        if version != self.settings.workspace_version:
+            self.migrate_workspace(data, version)
+
+        self._open(data["archive_path"])
+
+        for tab_name in data["tabs"]:
+            self._create_tab(tab_name, preview=False)
+
+        for list_name, files in data["lists"].items():
+            self.add_file_list(list_name)
+            file_list_widget: FileList = self.listwidget.active_list
+            file_list_widget.add_files(files["files"])
+
+            if files["is_favorite"]:
+                file_list_widget.is_favorite = True
+                self.listwidget.favorite_list = file_list_widget
+
+        self.remove_list_tab(0)
+
+    def migrate_workspace(self, data: dict, version: int):
+        return data
 
     def close_archive(self):
         if not self.close_unsaved():
@@ -106,8 +271,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         for i in reversed(range(self.tabs.count())):
             self.remove_file_tab(i)
 
-        if hasattr(self, "listwidget"):
-            self.listwidget.update_list(True)
+        for i in reversed(range(self.listwidget.count() - 1)):
+            self.remove_list_tab(i)
 
         self.update_archive_name("No Archive Open")
         self.lock_ui(True)
