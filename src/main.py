@@ -81,7 +81,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.archive = None
         self.path = None
-        self.workspace_name = "MyWorkspace"
+        self.workspace_name = None
 
         self.settings = Settings(self)
         if self.settings.dark_mode:
@@ -196,7 +196,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self,
             "Save Workspace",
             "Enter a name for the workspace:",
-            text=self.workspace_name,
+            text=self.workspace_name if self.workspace_name else "MyWorkspace",
         )
 
         if not ok or not workspace_name:
@@ -478,9 +478,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.tab_current_index = self.listwidget.currentIndex()
             return
 
-        default_name = "List" if self.listwidget.count() == 1 else ""
-        dialog = NewTabDialog(self, default_name)
+        existing_names = {self.listwidget.tabText(i) for i in range(self.listwidget.count() - 1)}
+        counter = 1
+        while f"List {counter}" in existing_names:
+            counter += 1
 
+        dialog = NewTabDialog(self, f"List {counter}")
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return self.listwidget.setCurrentIndex(self.tab_current_index)
 

@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QInputDialog,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTabWidget,
     QTextEdit,
@@ -235,6 +236,7 @@ class NewTabDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("New File Tab")
         self.setFixedWidth(400)
+        self.parent_window = parent
 
         from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QRadioButton
 
@@ -264,11 +266,39 @@ class NewTabDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self.validate_and_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
         self.name_input.setFocus()
+
+    def validate_and_accept(self):
+        """Validate the tab name before accepting the dialog"""
+        name = self.name_input.text().strip()
+
+        if not name:
+            QMessageBox.warning(
+                self, "Invalid Name", "Tab name cannot be blank. Please enter a valid name."
+            )
+            self.name_input.setFocus()
+            return
+
+        existing_names = {
+            self.parent_window.listwidget.tabText(i)
+            for i in range(self.parent_window.listwidget.count() - 1)
+        }
+
+        if name in existing_names:
+            QMessageBox.warning(
+                self,
+                "Duplicate Name",
+                f"A tab named '{name}' already exists. Please choose a different name.",
+            )
+            self.name_input.selectAll()
+            self.name_input.setFocus()
+            return
+
+        self.accept()
 
     def get_values(self):
         """Returns (name, widget_type) where widget_type is 'tree' or 'list'"""

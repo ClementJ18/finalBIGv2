@@ -176,6 +176,9 @@ class FileTree(QTreeWidget):
         return super().eventFilter(source, event)
 
     def context_menu(self, pos):
+        if not self.is_file_selected():
+            return
+
         global_position = self.mapToGlobal(pos)
 
         menu = QMenu(self)
