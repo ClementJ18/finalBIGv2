@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
-from misc import ArchiveSearchThread
+from misc import ArchiveSearchThread, FileListObject
 from tabs.generic_tab import GenericTab
 from utils.utils import SEARCH_HISTORY_MAX
 
@@ -26,7 +26,9 @@ class SearchManager:
             matches = returned[0]
             for x in range(self.listwidget.active_list.count()):
                 item = self.listwidget.active_list.item(x)
-                item.setHidden(item.text() not in matches)
+                item.setHidden(self.listwidget.active_list.get_item_path(item) not in matches)
+
+            self.listwidget.active_list.post_filter()
 
             self.message_box.done(1)
             QMessageBox.information(
@@ -59,20 +61,51 @@ class SearchManager:
         widget: GenericTab = self.tabs.widget(index)
         widget.search()
 
-    def filter_list(self: "MainWindow"):
+    def filter_list_from_search(self: "MainWindow"):
         search = self.search.currentText().strip()
         invert = self.invert_box.isChecked()
         re_filter = self.re_filter_box.isChecked()
         use_regex = self.regex_filter_box.isChecked()
         active_list = self.listwidget.active_list
-        files = [active_list.item(i) for i in range(active_list.count())]
+        files = active_list.get_items()
 
         if not search:
             active_list.setUpdatesEnabled(False)
             for item in files:
                 item.setHidden(False)
+
+            active_list.post_filter()
             active_list.setUpdatesEnabled(True)
+            active_list.filter = None
             return
+
+        self._filter_list(active_list, search, invert, use_regex, re_filter)
+
+        existing_searches = {self.search.itemText(x) for x in range(self.search.count())}
+        if search not in existing_searches:
+            self.search.addItem(search)
+            if self.search.count() > SEARCH_HISTORY_MAX:
+                self.search.removeItem(0)
+
+    def filter_list(
+        self: "MainWindow",
+        file_list: FileListObject,
+        search: str,
+        invert: bool,
+        use_regex: bool,
+        re_filter: bool,
+    ):
+        self._filter_list(file_list, search, invert, use_regex, re_filter)
+
+    def _filter_list(
+        self: "MainWindow",
+        file_list: FileListObject,
+        search: str,
+        invert: bool,
+        use_regex: bool,
+        re_filter: bool,
+    ):
+        files = file_list.get_items()
 
         if use_regex:
             try:
@@ -85,17 +118,18 @@ class SearchManager:
 
             matcher = partial(fnmatch.fnmatch, pat=f"*{search}*")
 
-        active_list.setUpdatesEnabled(False)
+        file_list.setUpdatesEnabled(False)
         for item in files:
             if item.isHidden() and re_filter:
                 continue
 
-            match = bool(matcher(item.text()))
-            item.setHidden(not (match ^ invert))
-        active_list.setUpdatesEnabled(True)
+            item_text = file_list.get_item_path(item)
+            if item_text is None or item_text == "":
+                continue
 
-        existing_searches = {self.search.itemText(x) for x in range(self.search.count())}
-        if search not in existing_searches:
-            self.search.addItem(search)
-            if self.search.count() > SEARCH_HISTORY_MAX:
-                self.search.removeItem(0)
+            match = bool(matcher(item_text))
+            item.setHidden(not (match ^ invert))
+
+        file_list.post_filter()
+        file_list.setUpdatesEnabled(True)
+        file_list.filter = (search, invert, use_regex)

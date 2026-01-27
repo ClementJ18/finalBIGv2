@@ -21,18 +21,17 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QInputDialog,
     QMainWindow,
-    QMenu,
-    QMenuBar,
     QMessageBox,
     QPushButton,
     QTabBar,
-    QWidget,
 )
 
-from misc import FileList, WorkspaceDialog, WrappingInputDialog
+from file_views import FileList
+from misc import FileListObject, FileTree, NewTabDialog, WorkspaceDialog, WrappingInputDialog
 from search import SearchManager
 from settings import Settings
 from tabs import get_tab_from_file_type
@@ -82,6 +81,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.archive = None
         self.path = None
+        self.workspace_name = "MyWorkspace"
 
         self.settings = Settings(self)
         if self.settings.dark_mode:
@@ -188,17 +188,15 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not self.close_unsaved():
             return
 
-        if not self._open(archive_path):
-            return
-
         self.restore_workspace(workspace_data)
+        self.workspace_name = workspace_name
 
     def save_workspace(self):
         workspace_name, ok = QInputDialog.getText(
             self,
             "Save Workspace",
             "Enter a name for the workspace:",
-            text="MyWorkspace",
+            text=self.workspace_name,
         )
 
         if not ok or not workspace_name:
@@ -226,13 +224,22 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             workspace_data["tabs"].append(tab.name)
 
         for i in range(self.listwidget.count() - 1):
-            tab: FileList = self.listwidget.widget(i)
-            workspace_data["lists"][self.listwidget.tabText(i)] = {
-                "files": [tab.item(x).text() for x in range(tab.count())],
+            tab: FileListObject = self.listwidget.widget(i)
+            data = {
                 "is_favorite": tab.is_favorite,
+                "type": "tree" if isinstance(tab, FileTree) else "list",
+                "filter": tab.filter,
+                "files": [],
             }
 
+            if tab.is_favorite:
+                data["files"] = [tab.get_item_path(tab.item(x)) for x in range(tab.count())]
+
+            workspace_data["lists"][self.listwidget.tabText(i)] = data
+
+        workspace_data["search"] = [self.search.itemText(i) for i in range(self.search.count())]
         self.settings.save_workspace(workspace_name, workspace_data)
+
         QMessageBox.information(
             self, "Workspace Saved", f"Workspace <b>{workspace_name}</b> has been saved."
         )
@@ -247,16 +254,26 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         for tab_name in data["tabs"]:
             self._create_tab(tab_name, preview=False)
 
-        for list_name, files in data["lists"].items():
-            self.add_file_list(list_name)
-            file_list_widget: FileList = self.listwidget.active_list
-            file_list_widget.add_files(files["files"])
+        files = self.archive.file_list()
+        for list_name, list_data in data["lists"].items():
+            self.add_file_list(list_name, list_data["type"])
+            file_list_widget: FileListObject = self.listwidget.active_list
+            file_list_widget.filter = list_data["filter"]
 
-            if files["is_favorite"]:
+            if list_data["is_favorite"]:
                 file_list_widget.is_favorite = True
                 self.listwidget.favorite_list = file_list_widget
+                file_list_widget.add_files([file for file in list_data["files"] if file in files])
+            else:
+                file_list_widget.add_files(files)
+
+            if file_list_widget.filter is not None:
+                search, invert, use_regex = file_list_widget.filter
+                self.filter_list(file_list_widget, search, invert, use_regex, re_filter=False)
 
         self.remove_list_tab(0)
+
+        self.search.addItems(data["search"])
 
     def migrate_workspace(self, data: dict, version: int):
         return data
@@ -282,7 +299,6 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def lock_ui(self, locked: bool):
         """Disable or enable all widgets & actions except the exceptions."""
-        # Lock all actions
         for action in cast(list[QAction], self.findChildren(QAction)):
             if action.menu() is not None:
                 continue
@@ -290,12 +306,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             if action not in self.lock_exceptions:
                 action.setEnabled(not locked)
 
-        # Lock all widgets (including central widget)
-        for widget in cast(list[QWidget], self.findChildren(QWidget)):
-            if isinstance(widget, (QMenuBar, QMenu)):
-                continue
-
-            widget.setEnabled(not locked)
+        self.listwidget.setEnabled(not locked)
+        self.tabs.setEnabled(not locked)
+        self.search.setEnabled(not locked)
 
     def add_to_recent_files(self, path):
         self.settings.add_to_recent_files(path)
@@ -323,7 +336,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             path = action.data()
             try:
                 success = self._open(path)
-            except Exception:
+            except FileNotFoundError:
                 success = False
 
         if not success:
@@ -331,13 +344,6 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             if path in recent_files:
                 recent_files.remove(path)
                 self.settings.save_recent_files(recent_files)
-
-    def is_file_selected(self):
-        if not self.listwidget.active_list.selectedItems():
-            QMessageBox.warning(self, "No file selected", "You have not selected a file")
-            return False
-
-        return True
 
     def update_archive_name(self, name=None):
         if name is None:
@@ -400,6 +406,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.path = path
         self.update_archive_name()
         self.add_to_recent_files(path)
+
+        self.add_file_list()
+        self.tab_current_index = self.listwidget.currentIndex()
         self.listwidget.update_list(True)
         self.lock_ui(False)
 
@@ -446,8 +455,15 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.listwidget.remove_tab(index)
 
-    def add_file_list(self, name="List"):
-        widget = FileList(self)
+    def add_file_list(self, name="List", widget_type=None):
+        if widget_type is None:
+            widget_type = self.settings.default_file_list_type
+
+        if widget_type == "tree":
+            widget = FileTree(self)
+        else:
+            widget = FileList(self)
+
         widget.update_list()
 
         self.listwidget.insertTab(self.listwidget.count() - 1, widget, name)
@@ -458,13 +474,21 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.tab_current_index = self.listwidget.currentIndex()
             return
 
-        name = "List"
-        if self.listwidget.count() != 1:
-            name, ok = QInputDialog.getText(self, "Tab name", "Pick a name for your new tab:")
-            if not ok:
-                return self.listwidget.setCurrentIndex(self.tab_current_index)
+        if self.archive is None:
+            self.tab_current_index = self.listwidget.currentIndex()
+            return
 
-        self.add_file_list(name)
+        default_name = "List" if self.listwidget.count() == 1 else ""
+        dialog = NewTabDialog(self, default_name)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return self.listwidget.setCurrentIndex(self.tab_current_index)
+
+        name, widget_type = dialog.get_values()
+        if not name:
+            return self.listwidget.setCurrentIndex(self.tab_current_index)
+
+        self.add_file_list(name, widget_type)
         self.tab_current_index = self.listwidget.currentIndex()
 
     def show_help(self):
@@ -481,7 +505,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if filtered:
             active_list = self.listwidget.active_list
             file_list = (
-                active_list.item(x).text()
+                active_list.get_item_path(active_list.item(x))
                 for x in range(active_list.count())
                 if not active_list.item(x).isHidden()
             )
@@ -717,14 +741,23 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         return ret
 
+    def is_file_selected(self):
+        if not self.listwidget.active_list.is_file_selected():
+            QMessageBox.warning(self, "No file selected", "You have not selected a file")
+            return False
+
+        return True
+
+    def get_selected_files(self) -> list[str]:
+        return self.listwidget.active_list.get_selected_files()
+
     def delete(self):
         if not self.is_file_selected():
             return
 
         deleted = []
         skip_all = False
-        for item in self.listwidget.active_list.selectedItems():
-            name = item.text()
+        for name in self.get_selected_files():
             if not skip_all:
                 ret = QMessageBox.question(
                     self,
@@ -767,14 +800,14 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not self.is_file_selected():
             return
 
-        original_name = self.listwidget.active_list.currentItem().text()
+        original_name = self.listwidget.active_list.current_item_text()
         app.clipboard().setText(original_name)
 
     def rename(self):
         if not self.is_file_selected():
             return
 
-        original_name = self.listwidget.active_list.currentItem().text()
+        original_name = self.listwidget.active_list.current_item_text()
 
         name, ok = WrappingInputDialog.getText(
             self, "Filename", f"Rename {original_name} as:", original_name
@@ -802,23 +835,20 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not self.is_file_selected():
             return
 
-        items = self.listwidget.active_list.selectedItems()
-        self.listwidget.add_favorites([item.text() for item in items])
+        self.listwidget.add_favorites(self.get_selected_files())
 
     def remove_favorites(self):
         if not self.is_file_selected():
             return
 
-        items = self.listwidget.favorite_list.selectedItems()
-        self.listwidget.remove_favorites([item.text() for item in items])
+        self.listwidget.remove_favorites(self.get_selected_files())
 
     def extract(self):
         if not self.is_file_selected():
             return
 
-        items = self.listwidget.active_list.selectedItems()
-
-        if len(items) > 1:
+        files = self.get_selected_files()
+        if len(files) > 1:
             path = QFileDialog.getExistingDirectory(
                 self, "Extract filtered files to directory", self.settings.last_dir
             )
@@ -826,10 +856,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 return
 
             self.settings.last_dir = path
-            self.archive.extract(path, files=[item.text() for item in items])
+            self.archive.extract(path, files=files)
         else:
-            item = items[0]
-            name = item.text()
+            name = files[0]
             file_name = name.split("\\")[-1]
             path = QFileDialog.getSaveFileName(
                 self, "Extract file", os.path.join(self.settings.last_dir, file_name)
@@ -864,7 +893,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         active_list = self.listwidget.active_list
         files = [
-            active_list.item(x).text()
+            active_list.get_item_path(active_list.item(x))
             for x in range(active_list.count())
             if not active_list.item(x).isHidden()
         ]
@@ -920,7 +949,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.tabs.setCurrentIndex(index)
 
     def file_double_clicked(self, _):
-        name = self.listwidget.active_list.currentItem().text()
+        if not self.listwidget.active_list.is_valid_selection():
+            return
+
+        name = self.listwidget.active_list.current_item_text()
         idx = self._find_tab_index(name, preview=False)
         if idx != -1:
             self.tabs.setCurrentIndex(idx)
@@ -931,7 +963,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not self.settings.preview_enabled:
             return
 
-        name = self.listwidget.active_list.currentItem().text()
+        if not self.listwidget.active_list.is_valid_selection():
+            return
+
+        name = self.listwidget.active_list.current_item_text()
         idx = self._find_tab_index(name, preview=None)
         if idx != -1:
             self.tabs.setCurrentIndex(idx)

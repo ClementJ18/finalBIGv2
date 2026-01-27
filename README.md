@@ -24,6 +24,9 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Scroll through multiple instances of the file list
 * Drag and drop support
 * Favorite/unfavorite files
+* Update notification
+* Workspace saving
+* Folder tree visualisation for files
 * And many more in the future!
 
 At this very early stage I am mostly looking for feedback so if you have any thoughts feel free to open a ticket or find me on discord @Necro#6714. I can usually be found on quite a few BFME/SAGE servers.

@@ -127,6 +127,14 @@ class Settings:
         self.set_bool("settings/smart_replace", value)
 
     @property
+    def default_file_list_type(self) -> str:
+        return self.get_str("settings/default_file_list_type", "tree")
+
+    @default_file_list_type.setter
+    def default_file_list_type(self, value: str) -> None:
+        self.set_str("settings/default_file_list_type", value)
+
+    @property
     def ignore_version_update(self) -> bool:
         return self.get_str("update/ignore_version_update", None)
 
@@ -210,6 +218,10 @@ class Settings:
 
     def toggle_smart_replace(self):
         self.smart_replace_enabled = self.main.smart_replace_action.isChecked()
+
+    def toggle_default_file_list_type(self):
+        is_checked = self.main.default_tree_action.isChecked()
+        self.default_file_list_type = "tree" if is_checked else "list"
 
     def workspace_exists(self, name: str) -> bool:
         workspace_file = os.path.join(self.workspace_folder, f"{name}.json")

@@ -138,7 +138,7 @@ class GenericTab(QWidget):
         return controls_widget
 
     def edit(self):
-        name = self.main.listwidget.active_list.currentItem().text()
+        name = self.main.listwidget.active_list.current_item_text()
         idx = self.main._find_tab_index(name, preview=False)
         if idx != -1:
             self.main.tabs.setCurrentIndex(idx)

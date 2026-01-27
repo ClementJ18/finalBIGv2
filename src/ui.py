@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from misc import FileList, FileListTabs, SearchBox, TabWidget
+from file_views import FileList
+from misc import FileListTabs, SearchBox, TabWidget
 from utils.utils import resource_path
 
 if TYPE_CHECKING:
@@ -36,6 +37,7 @@ class HasUiElements:
     large_archive_action: QAction
     smart_replace_action: QAction
     preview_action: QAction
+    default_tree_action: QAction
     lock_exceptions: list
 
 
@@ -61,7 +63,7 @@ def create_ui(main: "MainWindow", basedir: str):
     search_widget.setLayout(search_layout)
 
     main.search = SearchBox(
-        main, enter_callback=main.filter_list, placeholder_text="Search file list..."
+        main, enter_callback=main.filter_list_from_search, placeholder_text="Search file list..."
     )
     completer = main.search.completer()
     completer.setCaseSensitivity(Qt.CaseSensitivity.CaseSensitive)
@@ -69,7 +71,7 @@ def create_ui(main: "MainWindow", basedir: str):
     search_layout.addWidget(main.search, stretch=5)
 
     main.search_button = QPushButton("Filter file list", main)
-    main.search_button.clicked.connect(main.filter_list)
+    main.search_button.clicked.connect(main.filter_list_from_search)
     search_layout.addWidget(main.search_button, stretch=1)
 
     main.invert_box = QCheckBox("Invert?", main)
@@ -234,6 +236,13 @@ def create_menu(main: "MainWindow"):
     main.preview_action.triggered.connect(main.settings.toggle_preview)
     option_menu.addAction(main.preview_action)
     main.lock_exceptions.append(main.preview_action)
+
+    main.default_tree_action = QAction("Default &Tree View?", main, checkable=True)
+    main.default_tree_action.setToolTip("Use tree view by default when creating new file lists")
+    main.default_tree_action.setChecked(main.settings.default_file_list_type == "tree")
+    main.default_tree_action.triggered.connect(main.settings.toggle_default_file_list_type)
+    option_menu.addAction(main.default_tree_action)
+    main.lock_exceptions.append(main.default_tree_action)
 
     main.lock_exceptions.append(option_menu.addAction("&Set encoding", main.settings.set_encoding))
 
