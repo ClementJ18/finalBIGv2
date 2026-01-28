@@ -223,31 +223,57 @@ class Settings:
         is_checked = self.main.default_tree_action.isChecked()
         self.default_file_list_type = "tree" if is_checked else "list"
 
+    def get_workspace_path(self, name: str) -> str:
+        return os.path.join(self.workspace_folder, f"{name}.fbigv2")
+
     def workspace_exists(self, name: str) -> bool:
-        workspace_file = os.path.join(self.workspace_folder, f"{name}.json")
+        workspace_file = self.get_workspace_path(name)
         return os.path.exists(workspace_file)
 
     def get_workspace(self, name: str) -> dict:
-        workspace_file = os.path.join(self.workspace_folder, f"{name}.json")
-
+        workspace_file = self.get_workspace_path(name)
         if os.path.exists(workspace_file):
             with open(workspace_file, "r") as f:
                 return json.load(f)
         return {}
 
     def save_workspace(self, name: str, data: dict) -> None:
-        workspace_file = os.path.join(self.workspace_folder, f"{name}.json")
+        workspace_file = self.get_workspace_path(name)
         with open(workspace_file, "w") as f:
             json.dump(data, f, indent=2)
+
+    def list_recent_workspaces(self) -> list[str]:
+        workspaces = []
+        for file in os.listdir(self.workspace_folder):
+            if file.endswith(".fbigv2"):
+                path = os.path.join(self.workspace_folder, file)
+                mod_time = datetime.fromtimestamp(os.path.getmtime(path))
+                workspaces.append((os.path.splitext(file)[0], mod_time))
+        workspaces.sort(key=lambda x: x[1], reverse=True)
+
+        return [workspace[0] for workspace in workspaces]
 
     def list_workspaces(self) -> list[str]:
         workspaces = []
         for file in os.listdir(self.workspace_folder):
-            if file.endswith(".json"):
+            if file.endswith(".fbigv2"):
                 workspaces.append(os.path.splitext(file)[0])
         return workspaces
 
     def delete_workspace(self, name: str) -> None:
-        workspace_file = os.path.join(self.workspace_folder, f"{name}.json")
+        workspace_file = self.get_workspace_path(name)
         if os.path.exists(workspace_file):
             os.remove(workspace_file)
+
+    def rename_workspace(self, old_name: str, new_name: str) -> bool:
+        """Rename a workspace. Returns True if successful."""
+        old_path = self.get_workspace_path(old_name)
+        new_path = self.get_workspace_path(new_name)
+
+        if not os.path.exists(old_path):
+            return False
+        if os.path.exists(new_path):
+            return False
+
+        os.rename(old_path, new_path)
+        return True

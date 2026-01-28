@@ -395,7 +395,15 @@ class TextTab(GenericTab):
         self.generate_layout()
         self.text_widget.setReadOnly(True)
 
+    def open_externally(self):
+        self.text_widget = None
+
+        return super().open_externally()
+
     def search(self):
+        if self.text_widget is None:
+            return
+
         search = self.search_box.currentText()
         regex = self.regex_box.isChecked()
         case = self.case_box.isChecked()
@@ -419,11 +427,17 @@ class TextTab(GenericTab):
         self.search_box.setFocus()
 
     def save_scroll_position(self):
+        if self.text_widget is None:
+            return
+
         first_visible_line = self.text_widget.firstVisibleLine()
         horizontal_scroll = self.text_widget.SendScintilla(QsciScintilla.SCI_GETXOFFSET)
         scroll[self.name] = (first_visible_line, horizontal_scroll)
 
     def restore_scroll_position(self):
+        if self.text_widget is None:
+            return
+
         if self.name in scroll:
             first_visible_line, horizontal_scroll = scroll.pop(self.name)
             self.text_widget.SendScintilla(

@@ -32,6 +32,7 @@ class HasUiElements:
     splitter: QSplitter
     shortcuts: list
     recent_menu: QMenu
+    workspace_menu: QMenu
     dark_mode_action: QAction
     use_external_action: QAction
     large_archive_action: QAction
@@ -41,7 +42,7 @@ class HasUiElements:
     lock_exceptions: list
 
 
-def create_ui(main: "MainWindow", basedir: str):
+def create_ui(main: "MainWindow"):
     main.setAcceptDrops(True)
     layout = QVBoxLayout()
 
@@ -94,13 +95,13 @@ def create_ui(main: "MainWindow", basedir: str):
     main.tabs.setUsesScrollButtons(True)
     main.tabs.tabBar().installEventFilter(main)
 
-    splitter = QSplitter(Qt.Orientation.Horizontal, main)
-    splitter.setOrientation(Qt.Orientation.Horizontal)
-    splitter.addWidget(main.listwidget)
-    splitter.addWidget(main.tabs)
-    splitter.setStretchFactor(0, 1)
-    splitter.setStretchFactor(1, 200)
-    layout.addWidget(splitter, stretch=100)
+    main.splitter = QSplitter(Qt.Orientation.Horizontal, main)
+    main.splitter.setOrientation(Qt.Orientation.Horizontal)
+    main.splitter.addWidget(main.listwidget)
+    main.splitter.addWidget(main.tabs)
+    main.splitter.setStretchFactor(0, 1)
+    main.splitter.setStretchFactor(1, 200)
+    layout.addWidget(main.splitter, stretch=100)
 
     widget = QWidget()
     widget.setLayout(layout)
@@ -130,10 +131,22 @@ def create_menu(main: "MainWindow"):
     file_menu.addMenu(main.recent_menu)
     main.update_recent_files_menu()
 
-    file_menu.addAction("&Save Workspace", main.save_workspace)
+    main.workspace_menu = QMenu("Workspaces", main)
+    file_menu.addMenu(main.workspace_menu)
+    main.lock_exceptions.append(main.workspace_menu)
 
-    open_workspace_action = file_menu.addAction("Open &Workspace", main.open_workspace)
+    main.workspace_menu.addAction("Save Workspace", main.save_workspace)
+
+    open_workspace_action = main.workspace_menu.addAction(
+        "Manage Workspaces", main.manage_workspace
+    )
+    open_workspace_action.setShortcut(QKeySequence("CTRL+R"))
     main.lock_exceptions.append(open_workspace_action)
+
+    main.workspace_menu.addAction("Close Workspace", main.close_workspace)
+
+    main.workspace_menu.addSeparator()
+    main.update_recent_workspace_menu()
 
     edit_menu = menu.addMenu("&Edit")
     new_file_action = edit_menu.addAction("&New File", main.new_file)
@@ -247,6 +260,6 @@ def create_menu(main: "MainWindow"):
     main.lock_exceptions.append(option_menu.addAction("&Set encoding", main.settings.set_encoding))
 
 
-def generate_ui(main: "MainWindow", basedir: str):
-    create_ui(main, basedir)
+def generate_ui(main: "MainWindow"):
+    create_ui(main)
     create_menu(main)

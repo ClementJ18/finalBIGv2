@@ -24,8 +24,7 @@ class SearchManager:
 
         def update_list_with_matches(returned):
             matches = returned[0]
-            for x in range(self.listwidget.active_list.count()):
-                item = self.listwidget.active_list.item(x)
+            for item in self.listwidget.active_list.get_items():
                 item.setHidden(self.listwidget.active_list.get_item_path(item) not in matches)
 
             self.listwidget.active_list.post_filter()
@@ -116,7 +115,7 @@ class SearchManager:
         else:
             from functools import partial
 
-            matcher = partial(fnmatch.fnmatch, pat=f"*{search}*")
+            matcher = partial(fnmatch.fnmatch, pat=f"*{search.lower()}*")
 
         file_list.setUpdatesEnabled(False)
         for item in files:
@@ -127,7 +126,8 @@ class SearchManager:
             if item_text is None or item_text == "":
                 continue
 
-            match = bool(matcher(item_text))
+            match_text = item_text if use_regex else item_text.lower()
+            match = bool(matcher(match_text))
             item.setHidden(not (match ^ invert))
 
         file_list.post_filter()

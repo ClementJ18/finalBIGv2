@@ -303,31 +303,36 @@ class CustomHeroTab(GenericTab):
 
     def save(self):
         try:
-            # Update hero info from UI
-            self.hero.name = self.name_edit.text()
-            self.hero.color1 = int(self.color1_edit.text())
-            self.hero.color2 = int(self.color2_edit.text())
-            self.hero.color3 = int(self.color3_edit.text())
+            if self.external:
+                with open(self.path, "rb") as f:
+                    cah_bytes = f.read()
+            else:
+                # Update hero info from UI
+                self.hero.name = self.name_edit.text()
+                self.hero.color1 = int(self.color1_edit.text())
+                self.hero.color2 = int(self.color2_edit.text())
+                self.hero.color3 = int(self.color3_edit.text())
 
-            # Update powers
-            new_powers = []
-            for row in range(self.powers_table.rowCount()):
-                power = self.powers_table.item(row, 0).text()
-                level = int(self.powers_table.item(row, 1).text())
-                index = int(self.powers_table.item(row, 2).text())
-                new_powers.append((power, level, index))
-            self.hero.powers = new_powers
+                # Update powers
+                new_powers = []
+                for row in range(self.powers_table.rowCount()):
+                    power = self.powers_table.item(row, 0).text()
+                    level = int(self.powers_table.item(row, 1).text())
+                    index = int(self.powers_table.item(row, 2).text())
+                    new_powers.append((power, level, index))
+                self.hero.powers = new_powers
 
-            # Update blings
-            new_blings = []
-            for row in range(self.blings_table.rowCount()):
-                bling = self.blings_table.item(row, 0).text()
-                index = int(self.blings_table.item(row, 1).text())
-                new_blings.append((bling, index))
-            self.hero.blings = new_blings
+                # Update blings
+                new_blings = []
+                for row in range(self.blings_table.rowCount()):
+                    bling = self.blings_table.item(row, 0).text()
+                    index = int(self.blings_table.item(row, 1).text())
+                    new_blings.append((bling, index))
+                self.hero.blings = new_blings
 
-            # Generate bytes and save
-            cah_bytes = self.hero.write()
+                # Generate bytes and save
+                cah_bytes = self.hero.write()
+
             self.archive.edit_file(self.name, cah_bytes)
             super().save()
         except Exception as e:

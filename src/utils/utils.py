@@ -1,3 +1,4 @@
+import ctypes
 import os
 import sys
 
@@ -113,6 +114,27 @@ def resource_path(relative_path):
     else:
         base_path = os.path.abspath("./src")
     return os.path.join(base_path, "assets", relative_path)
+
+
+def add_to_windows_recent(file_path: str):
+    """Add a file to Windows Recent Documents list"""
+    if not os.path.exists(file_path):
+        return
+
+    try:
+        # Load shell32.dll
+        shell32 = ctypes.windll.shell32
+
+        # SHARD_PATHW = 0x00000003 (Unicode path)
+        SHARD_PATHW = 0x00000003
+
+        # Convert path to wide string
+        path_buffer = ctypes.create_unicode_buffer(file_path)
+
+        # Call SHAddToRecentDocs
+        shell32.SHAddToRecentDocs(SHARD_PATHW, path_buffer)
+    except Exception as e:
+        print(f"Failed to add to recent docs: {e}")
 
 
 ENCODING_LIST = [

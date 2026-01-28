@@ -40,6 +40,7 @@ from ui import HasUiElements, generate_ui
 from utils.utils import (
     ABOUT_STRING,
     HELP_STRING,
+    add_to_windows_recent,
     normalize_name,
     preview_name,
     resource_path,
@@ -83,20 +84,29 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.path = None
         self.workspace_name = None
 
+        self.autosave_timer = QTimer()
+        self.autosave_timer.timeout.connect(self.auto_save_workspace)
+        self.autosave_timer.setInterval(5 * 60 * 1000)
+
         self.settings = Settings(self)
         if self.settings.dark_mode:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
         else:
             qdarktheme.setup_theme("light", corner_shape="sharp")
 
-        generate_ui(self, basedir)
-
-        self.add_file_list()
-        self.close_archive()
+        generate_ui(self)
+        self.update_archive_name("No Archive Open")
+        self.lock_ui(True)
+        self.update_recent_files_menu()
 
         path_arg = sys.argv[1] if len(sys.argv) > 1 and os.path.exists(sys.argv[1]) else None
         if path_arg:
-            self._open(path_arg)
+            if path_arg.endswith(".fbigv2"):
+                workspace_name = os.path.splitext(os.path.basename(path_arg))[0]
+                workspace_data = self.settings.get_workspace(workspace_name)
+                self.restore_workspace(workspace_name, workspace_data)
+            else:
+                self._open(path_arg)
 
         self.showMaximized()
         QTimer.singleShot(1000, self.post_init)
@@ -142,25 +152,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     "https://www.moddb.com/games/battle-for-middle-earth-ii/downloads/finalbigv2"
                 )
 
-    def delete_workspace(self, dialog: WorkspaceDialog):
-        workspace_name = dialog.textValue()
-        ret = QMessageBox.question(
-            self,
-            "Delete Workspace?",
-            f"Are you sure you want to delete the workspace <b>{workspace_name}</b>?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if ret == QMessageBox.StandardButton.Yes:
-            self.settings.delete_workspace(workspace_name)
-            dialog.workspaces.remove(workspace_name)
-            if not dialog.workspaces:
-                dialog.reject()
-                return
-
-            dialog.setComboBoxItems(dialog.workspaces)
-
-    def open_workspace(self):
+    def manage_workspace(self):
         workspaces = self.settings.list_workspaces()
         if not workspaces:
             QMessageBox.information(
@@ -178,18 +170,71 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         workspace_data = self.settings.get_workspace(workspace_name)
         archive_path = workspace_data.get("archive_path")
         if not archive_path or not os.path.exists(archive_path):
-            QMessageBox.warning(
+            ret = QMessageBox.question(
                 self,
-                "Error",
-                "The archive path stored in this workspace does not exist. Please open the archive manually.",
+                "Archive Not Found",
+                f"The archive path stored in this workspace does not exist:\n{archive_path}\n\nWould you like to locate it?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
             )
-            return
+            if ret == QMessageBox.StandardButton.No:
+                return
+
+            new_path = QFileDialog.getOpenFileName(
+                self, "Locate archive", self.settings.last_dir, "Big files (*.big);;All files (*)"
+            )[0]
+            if not new_path:
+                return
+
+            workspace_data["archive_path"] = new_path
+            self.settings.save_workspace(workspace_name, workspace_data)
 
         if not self.close_unsaved():
             return
 
-        self.restore_workspace(workspace_data)
-        self.workspace_name = workspace_name
+        self.restore_workspace(workspace_name, workspace_data)
+        add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
+
+    def open_recent_workspace(self):
+        action = self.sender()
+        if action:
+            workspace_name = action.data()
+            workspace_data = self.settings.get_workspace(workspace_name)
+            archive_path = workspace_data.get("archive_path")
+            if not archive_path or not os.path.exists(archive_path):
+                ret = QMessageBox.question(
+                    self,
+                    "Archive Not Found",
+                    f"The archive path stored in this workspace does not exist:\n{archive_path}\n\nWould you like to locate it?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if ret == QMessageBox.StandardButton.No:
+                    return
+
+                new_path = QFileDialog.getOpenFileName(
+                    self,
+                    "Locate archive",
+                    self.settings.last_dir,
+                    "Big files (*.big);;All files (*)",
+                )[0]
+                if not new_path:
+                    return
+
+                archive_path = new_path
+                workspace_data["archive_path"] = new_path
+                self.settings.save_workspace(workspace_name, workspace_data)
+
+            if not self.close_unsaved():
+                return
+
+            self.restore_workspace(workspace_name, workspace_data)
+            add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
+
+    def auto_save_workspace(self):
+        """Automatically save the current workspace if one is open."""
+        if self.workspace_name and self.archive:
+            self._save_workspace(self.workspace_name)
 
     def save_workspace(self):
         workspace_name, ok = QInputDialog.getText(
@@ -213,11 +258,28 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             if ret == QMessageBox.StandardButton.No:
                 return
 
+        self._save_workspace(workspace_name)
+
+        self.workspace_name = workspace_name
+        self.autosave_timer.start()
+
+        QMessageBox.information(
+            self, "Workspace Saved", f"Workspace <b>{workspace_name}</b> has been saved."
+        )
+
+    def _save_workspace(self, workspace_name: str):
+        existing_data = (
+            self.settings.get_workspace(workspace_name)
+            if self.settings.workspace_exists(workspace_name)
+            else {}
+        )
+
         workspace_data = {
             "archive_path": self.path,
             "tabs": [],
             "lists": {},
             "version": self.settings.workspace_version,
+            "notes": existing_data.get("notes", ""),
         }
         for i in range(self.tabs.count()):
             tab: GenericTab = self.tabs.widget(i)
@@ -239,20 +301,15 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         workspace_data["search"] = [self.search.itemText(i) for i in range(self.search.count())]
         self.settings.save_workspace(workspace_name, workspace_data)
+        add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
+        self.update_recent_workspace_menu()
 
-        QMessageBox.information(
-            self, "Workspace Saved", f"Workspace <b>{workspace_name}</b> has been saved."
-        )
-
-    def restore_workspace(self, data: dict):
+    def restore_workspace(self, workspace_name: str, data: dict):
         version = int(data["version"])
         if version != self.settings.workspace_version:
             self.migrate_workspace(data, version)
 
         self._open(data["archive_path"])
-
-        for tab_name in data["tabs"]:
-            self._create_tab(tab_name, preview=False)
 
         files = self.archive.file_list()
         for list_name, list_data in data["lists"].items():
@@ -275,13 +332,33 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.search.addItems(data["search"])
 
+        def update_tab():
+            for tab_name in data["tabs"]:
+                self._create_tab(tab_name, preview=False)
+
+        QTimer.singleShot(0, update_tab)
+
+        self.workspace_name = workspace_name
+        self.autosave_timer.start()
+        self.update_archive_name()
+
     def migrate_workspace(self, data: dict, version: int):
         return data
+
+    def close_workspace(self):
+        """Close the current workspace and archive."""
+        if self.close_archive():
+            self.workspace_name = None
+            self.autosave_timer.stop()
+            self.update_archive_name("No Archive Open")
+            self.update_recent_workspace_menu()
 
     def close_archive(self):
         if not self.close_unsaved():
             return False
 
+        self.autosave_timer.stop()
+        self.workspace_name = None
         self.archive = None
         self.path = None
 
@@ -313,6 +390,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
     def add_to_recent_files(self, path):
         self.settings.add_to_recent_files(path)
         self.update_recent_files_menu()
+        add_to_windows_recent(path)
 
     def update_recent_files_menu(self):
         recent_files = self.settings.recent_files()
@@ -329,6 +407,27 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.lock_exceptions.append(action)
             action.setData(path)
             action.setToolTip(path)
+
+    def update_recent_workspace_menu(self):
+        recent_workspaces = self.settings.list_recent_workspaces()
+        actions = self.workspace_menu.actions()
+        for action in actions[4:]:
+            self.workspace_menu.removeAction(action)
+
+        if not recent_workspaces:
+            action = self.workspace_menu.addAction("No Workspaces")
+            action.setEnabled(False)
+            return
+        for index, workspace_name in enumerate(recent_workspaces):
+            action = self.workspace_menu.addAction(
+                f"&{index + 1}. {workspace_name}", self.open_recent_workspace
+            )
+            if workspace_name == self.workspace_name:
+                action.setEnabled(False)
+
+            self.lock_exceptions.append(action)
+            action.setData(workspace_name)
+            action.setToolTip(workspace_name)
 
     def open_recent_file(self):
         action = self.sender()
@@ -349,7 +448,11 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if name is None:
             name = self.path or "Untitled Archive"
 
-        self.setWindowTitle(f"{os.path.basename(name)} - {self.base_name}")
+        title = f"{os.path.basename(name)} - {self.base_name}"
+        if self.workspace_name:
+            title = f"{os.path.basename(name)} [{self.workspace_name}] - {self.base_name}"
+
+        self.setWindowTitle(title)
 
     def _save(self, path):
         if path is None:
@@ -508,9 +611,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if filtered:
             active_list = self.listwidget.active_list
             file_list = (
-                active_list.get_item_path(active_list.item(x))
-                for x in range(active_list.count())
-                if not active_list.item(x).isHidden()
+                active_list.get_item_path(item)
+                for item in active_list.get_items()
+                if not item.isHidden()
             )
         else:
             file_list = self.archive.file_list()
@@ -896,9 +999,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         active_list = self.listwidget.active_list
         files = [
-            active_list.get_item_path(active_list.item(x))
-            for x in range(active_list.count())
-            if not active_list.item(x).isHidden()
+            active_list.get_item_path(item)
+            for item in active_list.get_items()
+            if not item.isHidden()
         ]
 
         self.archive.extract(path, files=files)
