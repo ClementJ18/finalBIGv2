@@ -1,13 +1,16 @@
 import json
 import os
+from dataclasses import asdict, field
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import platformdirs
 import qdarktheme
+from attr import dataclass
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
+from file_views import ListFileView
 from utils.utils import ENCODING_LIST, RECENT_FILES_MAX
 
 if TYPE_CHECKING:
@@ -22,6 +25,53 @@ def str_to_bool(value) -> bool:
     if isinstance(value, int):
         return bool(value)
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass
+class FileList:
+    is_favorite: bool
+    type: str
+    filter: str
+    files: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    def from_dict(data: dict) -> "FileList":
+        return FileList(
+            is_favorite=data.get("is_favorite", False),
+            type=data.get("type", "list"),
+            filter=data.get("filter", ""),
+            files=data.get("files", []),
+        )
+
+
+@dataclass
+class Workplace:
+    name: str
+    archive_path: str
+    lists: dict[str, FileList] = field(default_factory=dict)
+    tabs: list[str] = field(default_factory=list)
+    notes: str
+    version: int
+    search: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        data = asdict(self)
+        data["lists"] = {k: v.to_dict() for k, v in self.lists.items()}
+
+        return data
+
+    def from_dict(data: dict) -> "Workplace":
+        lists = {k: FileList.from_dict(v) for k, v in data.get("lists", {}).items()}
+        return Workplace(
+            name=data.get("name", ""),
+            archive_path=data.get("archive_path", ""),
+            lists=lists,
+            tabs=data.get("tabs", []),
+            notes=data.get("notes", ""),
+            version=data.get("version", 0),
+        )
 
 
 class Settings:
@@ -128,7 +178,7 @@ class Settings:
 
     @property
     def default_file_list_type(self) -> str:
-        return self.get_str("settings/default_file_list_type", "tree")
+        return self.get_str("settings/default_file_list_type", ListFileView.view_type)
 
     @default_file_list_type.setter
     def default_file_list_type(self, value: str) -> None:
@@ -219,9 +269,9 @@ class Settings:
     def toggle_smart_replace(self):
         self.smart_replace_enabled = self.main.smart_replace_action.isChecked()
 
-    def toggle_default_file_list_type(self):
-        is_checked = self.main.default_tree_action.isChecked()
-        self.default_file_list_type = "tree" if is_checked else "list"
+    def set_default_file_list_type(self, view_type: str):
+        """Set the default file list view type."""
+        self.default_file_list_type = view_type
 
     def get_workspace_path(self, name: str) -> str:
         return os.path.join(self.workspace_folder, f"{name}.fbigv2")
@@ -230,17 +280,18 @@ class Settings:
         workspace_file = self.get_workspace_path(name)
         return os.path.exists(workspace_file)
 
-    def get_workspace(self, name: str) -> dict:
+    def get_workspace(self, name: str) -> Workplace:
         workspace_file = self.get_workspace_path(name)
         if os.path.exists(workspace_file):
             with open(workspace_file, "r") as f:
-                return json.load(f)
-        return {}
+                return Workplace.from_dict(json.load(f))
 
-    def save_workspace(self, name: str, data: dict) -> None:
+        return Workplace("", "", {}, [], "", 0)
+
+    def save_workspace(self, name: str, data: Workplace) -> None:
         workspace_file = self.get_workspace_path(name)
         with open(workspace_file, "w") as f:
-            json.dump(data, f, indent=2)
+            json.dump(data.to_dict(), f, indent=2)
 
     def list_recent_workspaces(self) -> list[str]:
         workspaces = []
@@ -249,8 +300,8 @@ class Settings:
                 path = os.path.join(self.workspace_folder, file)
                 mod_time = datetime.fromtimestamp(os.path.getmtime(path))
                 workspaces.append((os.path.splitext(file)[0], mod_time))
-        workspaces.sort(key=lambda x: x[1], reverse=True)
 
+        workspaces.sort(key=lambda x: x[1], reverse=True)
         return [workspace[0] for workspace in workspaces]
 
     def list_workspaces(self) -> list[str]:

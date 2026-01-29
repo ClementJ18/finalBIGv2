@@ -30,12 +30,11 @@ from PyQt6.QtWidgets import (
     QTabBar,
 )
 
-from file_views import FileList
-from misc import FileListObject, FileTree, NewTabDialog, WorkspaceDialog, WrappingInputDialog
+from file_views import get_file_view_class
+from misc import NewTabDialog, WrappingInputDialog
 from search import SearchManager
-from settings import Settings
+from settings import FileList, Settings, Workplace
 from tabs import get_tab_from_file_type
-from tabs.generic_tab import GenericTab
 from ui import HasUiElements, generate_ui
 from utils.utils import (
     ABOUT_STRING,
@@ -45,6 +44,7 @@ from utils.utils import (
     preview_name,
     resource_path,
 )
+from workspaces import WorkspaceDialog
 
 __version__ = "0.14.0"
 
@@ -103,8 +103,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if path_arg:
             if path_arg.endswith(".fbigv2"):
                 workspace_name = os.path.splitext(os.path.basename(path_arg))[0]
-                workspace_data = self.settings.get_workspace(workspace_name)
-                self.restore_workspace(workspace_name, workspace_data)
+                workspace = self.settings.get_workspace(workspace_name)
+                self.restore_workspace(workspace_name, workspace)
             else:
                 self._open(path_arg)
 
@@ -167,8 +167,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
 
         workspace_name = dialog.textValue()
-        workspace_data = self.settings.get_workspace(workspace_name)
-        archive_path = workspace_data.get("archive_path")
+        workspace = self.settings.get_workspace(workspace_name)
+        archive_path = workspace.archive_path
         if not archive_path or not os.path.exists(archive_path):
             ret = QMessageBox.question(
                 self,
@@ -186,21 +186,21 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             if not new_path:
                 return
 
-            workspace_data["archive_path"] = new_path
-            self.settings.save_workspace(workspace_name, workspace_data)
+            workspace.archive_path = new_path
+            self.settings.save_workspace(workspace_name, workspace)
 
         if not self.close_unsaved():
             return
 
-        self.restore_workspace(workspace_name, workspace_data)
+        self.restore_workspace(workspace_name, workspace)
         add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
 
     def open_recent_workspace(self):
         action = self.sender()
         if action:
             workspace_name = action.data()
-            workspace_data = self.settings.get_workspace(workspace_name)
-            archive_path = workspace_data.get("archive_path")
+            workspace = self.settings.get_workspace(workspace_name)
+            archive_path = workspace.archive_path
             if not archive_path or not os.path.exists(archive_path):
                 ret = QMessageBox.question(
                     self,
@@ -222,13 +222,13 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     return
 
                 archive_path = new_path
-                workspace_data["archive_path"] = new_path
-                self.settings.save_workspace(workspace_name, workspace_data)
+                workspace.archive_path = new_path
+                self.settings.save_workspace(workspace_name, workspace)
 
             if not self.close_unsaved():
                 return
 
-            self.restore_workspace(workspace_name, workspace_data)
+            self.restore_workspace(workspace_name, workspace)
             add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
 
     def auto_save_workspace(self):
@@ -268,59 +268,58 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         )
 
     def _save_workspace(self, workspace_name: str):
-        existing_data = (
-            self.settings.get_workspace(workspace_name)
-            if self.settings.workspace_exists(workspace_name)
-            else {}
+        existing_workspace = self.settings.get_workspace(workspace_name)
+        new_workspace = Workplace(
+            archive_path=self.path,
+            notes=existing_workspace.notes if existing_workspace else "",
+            version=self.settings.workspace_version,
+            lists={},
+            tabs=[],
         )
 
-        workspace_data = {
-            "archive_path": self.path,
-            "tabs": [],
-            "lists": {},
-            "version": self.settings.workspace_version,
-            "notes": existing_data.get("notes", ""),
-        }
-        for i in range(self.tabs.count()):
-            tab: GenericTab = self.tabs.widget(i)
-            workspace_data["tabs"].append(tab.name)
-
         for i in range(self.listwidget.count() - 1):
-            tab: FileListObject = self.listwidget.widget(i)
-            data = {
-                "is_favorite": tab.is_favorite,
-                "type": "tree" if isinstance(tab, FileTree) else "list",
-                "filter": tab.filter,
-                "files": [],
-            }
+            file_list_widget = self.listwidget.widget(i)
+            file_list = FileList(
+                is_favorite=file_list_widget.is_favorite,
+                type=file_list_widget.view_type,
+                filter=file_list_widget.filter,
+                files=[],
+            )
 
-            if tab.is_favorite:
-                data["files"] = [tab.get_item_path(tab.item(x)) for x in range(tab.count())]
+            if file_list_widget.is_favorite:
+                file_list.files = [
+                    file_list_widget.get_item_path(item) for item in file_list_widget.get_items()
+                ]
 
-            workspace_data["lists"][self.listwidget.tabText(i)] = data
+            new_workspace.lists[self.listwidget.tabText(i)] = file_list
 
-        workspace_data["search"] = [self.search.itemText(i) for i in range(self.search.count())]
-        self.settings.save_workspace(workspace_name, workspace_data)
+        for i in range(self.tabs.count()):
+            tab = self.tabs.widget(i)
+            new_workspace.tabs.append(tab.name)
+
+        new_workspace.search = [self.search.itemText(i) for i in range(self.search.count())]
+
+        self.settings.save_workspace(workspace_name, new_workspace)
         add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
         self.update_recent_workspace_menu()
 
-    def restore_workspace(self, workspace_name: str, data: dict):
-        version = int(data["version"])
+    def restore_workspace(self, workspace_name: str, workspace: Workplace):
+        version = int(workspace.version)
         if version != self.settings.workspace_version:
-            self.migrate_workspace(data, version)
+            self.migrate_workspace(workspace, version)
 
-        self._open(data["archive_path"])
+        self._open(workspace.archive_path)
 
         files = self.archive.file_list()
-        for list_name, list_data in data["lists"].items():
-            self.add_file_list(list_name, list_data["type"])
-            file_list_widget: FileListObject = self.listwidget.active_list
-            file_list_widget.filter = list_data["filter"]
+        for list_name, list_data in workspace.lists.items():
+            self.add_file_list(list_name, list_data.type)
+            file_list_widget = self.listwidget.active_list
+            file_list_widget.filter = list_data.filter
 
-            if list_data["is_favorite"]:
+            if list_data.is_favorite:
                 file_list_widget.is_favorite = True
                 self.listwidget.favorite_list = file_list_widget
-                file_list_widget.add_files([file for file in list_data["files"] if file in files])
+                file_list_widget.add_files([file for file in list_data.files if file in files])
             else:
                 file_list_widget.add_files(files)
 
@@ -330,10 +329,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.remove_list_tab(0)
 
-        self.search.addItems(data["search"])
+        self.search.addItems(workspace.search)
 
         def update_tab():
-            for tab_name in data["tabs"]:
+            for tab_name in workspace.tabs:
                 self._create_tab(tab_name, preview=False)
 
         QTimer.singleShot(0, update_tab)
@@ -464,7 +463,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return False
 
         for index in range(self.tabs.count()):
-            tab: GenericTab = self.tabs.widget(index)
+            tab = self.tabs.widget(index)
             if tab.unsaved:
                 tab.save()
 
@@ -562,11 +561,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if widget_type is None:
             widget_type = self.settings.default_file_list_type
 
-        if widget_type == "tree":
-            widget = FileTree(self)
-        else:
-            widget = FileList(self)
-
+        widget = get_file_view_class(widget_type)(self)
         widget.update_list()
 
         self.listwidget.insertTab(self.listwidget.count() - 1, widget, name)
@@ -887,7 +882,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
 
         for i in reversed(range(self.tabs.count())):
-            tab: GenericTab = self.tabs.widget(i)
+            tab = self.tabs.widget(i)
             if tab.name in deleted:
                 self.tabs.remove_tab(i)
 
@@ -898,7 +893,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if self.tabs.count() < 0:
             return
 
-        tab: GenericTab = self.tabs.widget(0)
+        tab = self.tabs.widget(0)
         if tab.preview:
             self.remove_file_tab(0)
 
@@ -925,7 +920,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
 
         for i in reversed(range(self.tabs.count())):
-            tab: GenericTab = self.tabs.widget(i)
+            tab = self.tabs.widget(i)
             if tab.name == name:
                 self.tabs.remove_tab(i)
 
@@ -1010,14 +1005,14 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def _find_tab_index(self, name: str, preview: bool):
         for x in range(self.tabs.count()):
-            tab: GenericTab = self.tabs.widget(x)
+            tab = self.tabs.widget(x)
             if tab.name == name and (tab.preview == preview or preview is None):
                 return x
 
         return -1
 
     def _create_tab(self, name: str, preview: bool = False):
-        first_tab: GenericTab = self.tabs.widget(0)
+        first_tab = self.tabs.widget(0)
 
         if preview:
             if first_tab and first_tab.name == name:
@@ -1035,7 +1030,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             return
         else:
             for i in range(self.tabs.count()):
-                existing_tab: GenericTab = self.tabs.widget(i)
+                existing_tab = self.tabs.widget(i)
                 if existing_tab.name == name and not existing_tab.preview:
                     self.tabs.setCurrentIndex(i)
                     return
@@ -1081,7 +1076,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def refresh_tabs(self, files: list[str]):
         for i in range(self.tabs.count()):
-            tab: GenericTab = self.tabs.widget(i)
+            tab = self.tabs.widget(i)
             if tab.name in files:
                 self.remove_file_tab(i)
                 self._create_tab(tab.name, preview=tab.preview)
@@ -1094,7 +1089,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.close_tab(index)
 
     def close_tab(self, index):
-        tab: GenericTab = self.tabs.widget(index)
+        tab = self.tabs.widget(index)
         if tab.unsaved:
             ret = QMessageBox.question(
                 self,

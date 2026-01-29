@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QIcon, QKeySequence
+from PyQt6.QtGui import QAction, QActionGroup, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,8 +13,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from file_views import FileList
-from misc import FileListTabs, SearchBox, TabWidget
+from file_views import FileViewTabs, ListFileView, file_view_mapping
+from misc import SearchBox, TabWidget
 from utils.utils import resource_path
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 
 class HasUiElements:
-    listwidget: FileListTabs
+    listwidget: FileViewTabs
     tabs: TabWidget
     search: QComboBox
     search_button: QPushButton
@@ -38,7 +38,7 @@ class HasUiElements:
     large_archive_action: QAction
     smart_replace_action: QAction
     preview_action: QAction
-    default_tree_action: QAction
+    default_view_menu: QMenu
     lock_exceptions: list
 
 
@@ -46,11 +46,11 @@ def create_ui(main: "MainWindow"):
     main.setAcceptDrops(True)
     layout = QVBoxLayout()
 
-    main.listwidget = FileListTabs(main)
+    main.listwidget = FileViewTabs(main)
     main.listwidget.setElideMode(Qt.TextElideMode.ElideLeft)
     main.listwidget.setTabsClosable(True)
     main.listwidget.setUsesScrollButtons(True)
-    main.listwidget.addTab(FileList(main), QIcon(resource_path("new_tab.png")), "")
+    main.listwidget.addTab(ListFileView(main), QIcon(resource_path("new_tab.png")), "")
     main.listwidget.tabBar().setTabButton(
         0, main.listwidget.tabBar().ButtonPosition.RightSide, None
     )
@@ -250,12 +250,23 @@ def create_menu(main: "MainWindow"):
     option_menu.addAction(main.preview_action)
     main.lock_exceptions.append(main.preview_action)
 
-    main.default_tree_action = QAction("Default &Tree View?", main, checkable=True)
-    main.default_tree_action.setToolTip("Use tree view by default when creating new file lists")
-    main.default_tree_action.setChecked(main.settings.default_file_list_type == "tree")
-    main.default_tree_action.triggered.connect(main.settings.toggle_default_file_list_type)
-    option_menu.addAction(main.default_tree_action)
-    main.lock_exceptions.append(main.default_tree_action)
+    main.default_view_menu = QMenu("Default File &View", main)
+    main.default_view_menu.setToolTip("Select the default view type when creating new file lists")
+    option_menu.addMenu(main.default_view_menu)
+    main.lock_exceptions.append(main.default_view_menu)
+
+    view_action_group = QActionGroup(main)
+    view_action_group.setExclusive(True)
+
+    for view_type, _ in file_view_mapping.items():
+        view_action = QAction(f"{view_type.capitalize()} View", main, checkable=True)
+        view_action.setData(view_type)
+        view_action.setChecked(main.settings.default_file_list_type == view_type)
+        view_action.triggered.connect(
+            lambda checked, vtype=view_type: main.settings.set_default_file_list_type(vtype)
+        )
+        view_action_group.addAction(view_action)
+        main.default_view_menu.addAction(view_action)
 
     main.lock_exceptions.append(option_menu.addAction("&Set encoding", main.settings.set_encoding))
 

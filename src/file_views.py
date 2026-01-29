@@ -10,11 +10,17 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem,
 )
 
+from misc import TabWidget
+
 if TYPE_CHECKING:
     from main import MainWindow
 
 
 class FileViewAbstract:
+    filter: tuple | None
+    is_favorite: bool
+    view_type: str
+
     def context_menu(self, pos):
         raise NotImplementedError
 
@@ -45,8 +51,13 @@ class FileViewAbstract:
     def post_filter(self):
         raise NotImplementedError
 
+    def get_item_path(self, item: QObject) -> str | None:
+        raise NotImplementedError
 
-class FileList(QListWidget):
+
+class ListFileView(QListWidget, FileViewAbstract):
+    view_type = "list"
+
     def __init__(self, parent, is_favorite: bool = False):
         super().__init__(parent)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -147,7 +158,9 @@ class FileList(QListWidget):
         return item.text()
 
 
-class FileTree(QTreeWidget):
+class TreeFileView(QTreeWidget, FileViewAbstract):
+    view_type = "tree"
+
     def __init__(self, parent, is_favorite: bool = False):
         super().__init__(parent)
         self.setHeaderHidden(True)
@@ -369,3 +382,77 @@ class FileTree(QTreeWidget):
 
     def get_item_path(self, item: QTreeWidgetItem) -> str | None:
         return item.data(0, Qt.ItemDataRole.UserRole)
+
+
+file_view_mapping = {
+    ListFileView.view_type: ListFileView,
+    TreeFileView.view_type: TreeFileView,
+}
+
+
+def get_file_view_class(view_type: str) -> type[FileViewAbstract]:
+    return file_view_mapping.get(view_type, ListFileView)
+
+
+class FileViewTabs(TabWidget):
+    def __init__(self, parent: "MainWindow"):
+        super().__init__(parent)
+        self.favorite_list: FileViewAbstract = None
+        self.main = parent
+
+    @property
+    def active_list(self) -> FileViewAbstract:
+        return self.currentWidget()
+
+    @property
+    def all_lists(self) -> List[FileViewAbstract]:
+        return [
+            self.widget(i)
+            for i in range(self.count() - 1)
+            if isinstance(self.widget(i), (ListFileView, TreeFileView))
+        ]
+
+    @property
+    def all_but_favorite(self) -> List[FileViewAbstract]:
+        lists = []
+        for i in range(self.count() - 1):
+            widget = self.widget(i)
+            if isinstance(widget, (ListFileView, TreeFileView)) and not widget.is_favorite:
+                lists.append(widget)
+
+        return lists
+
+    def update_list(self, all=False):
+        to_update = self.all_but_favorite if all else [self.active_list]
+        for widget in to_update:
+            widget.update_list()
+
+    def add_files(self, files: List[str]):
+        for widget in self.all_but_favorite:
+            self.add_files_to_tab(widget, files)
+
+    def remove_files(self, files: List[str]):
+        for widget in self.all_lists:
+            self.remove_files_from_tab(widget, files)
+
+    def create_favorite_tab(self):
+        self.favorite_list = TreeFileView(self.main, is_favorite=True)
+        self.insertTab(0, self.favorite_list, "Favorites")
+
+    def add_favorites(self, files: List[str]):
+        if self.favorite_list is None:
+            self.create_favorite_tab()
+
+        self.add_files_to_tab(self.favorite_list, files)
+
+    def remove_favorites(self, files: List[str]):
+        self.remove_files_from_tab(self.favorite_list, files)
+
+    def add_files_to_tab(self, widget: FileViewAbstract, files: List[str]):
+        widget.add_files(files)
+
+    def remove_files_from_tab(self, widget: FileViewAbstract, files: List[str]):
+        widget.remove_files(files)
+
+    def widget(self, index) -> FileViewAbstract:
+        return super().widget(index)
