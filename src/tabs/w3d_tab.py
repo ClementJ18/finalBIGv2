@@ -1,6 +1,7 @@
 import io
 import math
 
+import numpy as np
 import pyBIG
 from OpenGL.GL import (
     GL_AMBIENT,
@@ -89,6 +90,7 @@ class GLWidget(QOpenGLWidget):
 
         self.lighting_preset = "Default"
         self.subobject_visibility = {}
+        self.bone_transforms = []  # Computed bone matrices for skinning
 
         self.camera_presets = {
             "front": (0, 0),
@@ -153,12 +155,32 @@ class GLWidget(QOpenGLWidget):
             else:
                 tx_coords = mesh.material_passes[0].tx_stages[0].tx_coords[0]
 
+            # Determine which vertices to use
+            use_skinning = self.bone_transforms and mesh.vert_infs
+            base_vertices = mesh.verts
+            normals = mesh.normals if mesh.normals else None
+
             glBegin(GL_TRIANGLES)
             for tri in mesh.triangles:
                 for idx in tri.vert_ids:
                     uv = tx_coords[idx]
-                    v = mesh.verts[idx]
-                    n = tri.normal
+
+                    # Apply skinning if skeleton is loaded
+                    if use_skinning and idx < len(mesh.vert_infs):
+                        influence = mesh.vert_infs[idx]
+                        v = self.transform_vertex(
+                            base_vertices[idx],
+                            influence.bone_idx,
+                            influence.bone_inf,
+                            influence.xtra_idx,
+                            influence.xtra_inf,
+                        )
+                    else:
+                        # Use bind pose or regular vertices
+                        v = mesh.verts_2[idx] if mesh.verts_2 else base_vertices[idx]
+
+                    # Use per-vertex normals if available, otherwise use triangle normal
+                    n = normals[idx] if normals and idx < len(normals) else tri.normal
                     glTexCoord2f(uv.x, uv.y)
                     glNormal3f(n.x, n.y, n.z)
                     glVertex3f(v.x, v.y, v.z)
@@ -282,6 +304,75 @@ class GLWidget(QOpenGLWidget):
             glLightfv(GL_LIGHT0, GL_AMBIENT, [0.1, 0.1, 0.1, 1.0])
             glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.7, 0.8, 0.8, 1.0])
 
+    def compute_bone_transforms(self, hierarchy):
+        """Compute world-space bone transformation matrices from hierarchy pivots."""
+        if not hierarchy or not hierarchy.pivots:
+            return []
+
+        bone_transforms = []
+
+        for i, pivot in enumerate(hierarchy.pivots):
+            # Create translation matrix
+            trans = np.eye(4)
+            trans[0:3, 3] = [pivot.translation.x, pivot.translation.y, pivot.translation.z]
+
+            # Create rotation matrix from quaternion
+            q = pivot.rotation
+            # Quaternion to rotation matrix
+            rot = np.eye(4)
+            rot[0, 0] = 1 - 2 * q.y * q.y - 2 * q.z * q.z
+            rot[0, 1] = 2 * q.x * q.y - 2 * q.z * q.w
+            rot[0, 2] = 2 * q.x * q.z + 2 * q.y * q.w
+            rot[1, 0] = 2 * q.x * q.y + 2 * q.z * q.w
+            rot[1, 1] = 1 - 2 * q.x * q.x - 2 * q.z * q.z
+            rot[1, 2] = 2 * q.y * q.z - 2 * q.x * q.w
+            rot[2, 0] = 2 * q.x * q.z - 2 * q.y * q.w
+            rot[2, 1] = 2 * q.y * q.z + 2 * q.x * q.w
+            rot[2, 2] = 1 - 2 * q.x * q.x - 2 * q.y * q.y
+
+            # Local transform = translation * rotation
+            local_transform = trans @ rot
+
+            # Apply fixup matrix if present
+            if pivot.fixup_matrix is not None:
+                local_transform = local_transform @ pivot.fixup_matrix
+
+            # Compute world transform by multiplying with parent's world transform
+            if pivot.parent_id >= 0 and pivot.parent_id < len(bone_transforms):
+                world_transform = bone_transforms[pivot.parent_id] @ local_transform
+            else:
+                world_transform = local_transform
+
+            bone_transforms.append(world_transform)
+
+        return bone_transforms
+
+    def transform_vertex(self, vertex, bone_idx1, weight1, bone_idx2, weight2):
+        """Apply bone transforms to a vertex with blending."""
+        if not self.bone_transforms:
+            return vertex
+
+        # Convert vertex to homogeneous coordinates
+        v = np.array([vertex.x, vertex.y, vertex.z, 1.0])
+        result = np.zeros(4)
+
+        # Apply primary bone influence
+        if bone_idx1 < len(self.bone_transforms):
+            result += (self.bone_transforms[bone_idx1] @ v) * weight1
+
+        # Apply secondary bone influence if present
+        if weight2 > 0 and bone_idx2 < len(self.bone_transforms):
+            result += (self.bone_transforms[bone_idx2] @ v) * weight2
+
+        # Return as Vector-like object
+        class TransformedVertex:
+            def __init__(self, x, y, z):
+                self.x = x
+                self.y = y
+                self.z = z
+
+        return TransformedVertex(result[0], result[1], result[2])
+
     def load_texture(self, image_data: bytes) -> int:
         """Load a texture from file and return texture ID."""
         texture_id = glGenTextures(1)
@@ -325,6 +416,8 @@ class W3DTab(GenericTab):
         load_file(self.context, self.data)
         self.subobject_data = self._get_subobject_data()
 
+        # breakpoint()
+
         top_row = QHBoxLayout()
 
         self.gl_widget = GLWidget(self, self.context, self.subobject_data)
@@ -332,6 +425,9 @@ class W3DTab(GenericTab):
 
         self.info_box = self._create_info_box()
         top_row.addWidget(self.info_box)
+
+        # Auto-load skeleton from the same archive if available
+        self._auto_load_skeleton()
 
         layout.addLayout(top_row)
 
@@ -408,13 +504,33 @@ class W3DTab(GenericTab):
                 load_texture_btn.setMaximumHeight(20)
                 load_texture_btn.setStyleSheet("background-color: red; color: white;")
                 load_texture_btn.clicked.connect(
-                    lambda _, name=subobject["name"]: self._load_texture_for_subobject(name)
+                    lambda _, name=subobject["name"]: self.load_texture_for_subobject(name)
                 )
                 texture_row.addWidget(load_texture_btn)
 
                 self.texture_buttons[subobject["name"]] = load_texture_btn
 
                 info_layout.addLayout(texture_row)
+
+        skeleton_header = QLabel("<b>Skeleton:</b>")
+        info_layout.addWidget(skeleton_header)
+
+        skeleton_row = QHBoxLayout()
+        hierarchy_name = self.context.hlod.header.hierarchy_name if self.context.hlod else "None"
+        skeleton_label = QLabel(f"  {hierarchy_name}")
+        skeleton_label.setWordWrap(True)
+        skeleton_row.addWidget(skeleton_label, stretch=1)
+
+        load_skeleton_btn = QPushButton("+")
+        load_skeleton_btn.setMaximumWidth(25)
+        load_skeleton_btn.setMaximumHeight(20)
+        load_skeleton_btn.setStyleSheet("background-color: red; color: white;")
+        load_skeleton_btn.clicked.connect(self._load_skeleton)
+        skeleton_row.addWidget(load_skeleton_btn)
+
+        self.skeleton_button = load_skeleton_btn
+
+        info_layout.addLayout(skeleton_row)
 
         info_layout.addStretch()
         return info_container
@@ -434,7 +550,7 @@ class W3DTab(GenericTab):
         self.gl_widget.subobject_visibility[name] = is_visible
         self.gl_widget.update()
 
-    def _load_texture_for_subobject(self, subobject_name):
+    def load_texture_for_subobject(self, subobject_name):
         """Prompt user to select a texture file for the subobject."""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -495,6 +611,122 @@ class W3DTab(GenericTab):
                         )
 
         self.gl_widget.update()
+
+    def _load_skeleton(self):
+        """Prompt user to select a skeleton/hierarchy file."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select skeleton/hierarchy file",
+            "",
+            "W3D Files (*.w3d);;BIG Archives (*.big);;All Files (*.*)",
+        )
+
+        if file_path:
+            hierarchy_loaded = False
+            is_archive = file_path.lower().endswith(".big")
+
+            if is_archive:
+                # Load from BIG archive
+                hierarchy_archive = pyBIG.InDiskArchive(file_path)
+                hierarchy_name = (
+                    self.context.hlod.header.hierarchy_name if self.context.hlod else None
+                )
+
+                if hierarchy_name:
+                    # Search for hierarchy file in archive
+                    for file in hierarchy_archive.file_list():
+                        if file.lower().endswith(".w3d"):
+                            file_name = file.split("\\")[-1]
+                            if hierarchy_name.lower() in file_name.lower():
+                                # Load hierarchy from archive
+                                w3d_data = hierarchy_archive.read_file(file)
+                                temp_context = DataContext()
+                                load_file(temp_context, w3d_data)
+
+                                if temp_context.hierarchy:
+                                    self.context.hierarchy = temp_context.hierarchy
+                                    self.gl_widget.bone_transforms = (
+                                        self.gl_widget.compute_bone_transforms(
+                                            temp_context.hierarchy
+                                        )
+                                    )
+                                    hierarchy_loaded = True
+                                    break
+
+                    if not hierarchy_loaded:
+                        QMessageBox.warning(
+                            self,
+                            "Hierarchy Not Found",
+                            f"Hierarchy '{hierarchy_name}' not found in archive.",
+                        )
+                else:
+                    QMessageBox.warning(
+                        self, "No Hierarchy Name", "Model does not specify a hierarchy name."
+                    )
+            else:
+                # Load from W3D file
+                with open(file_path, "rb") as f:
+                    w3d_data = f.read()
+                    temp_context = DataContext()
+                    load_file(temp_context, w3d_data)
+
+                    if temp_context.hierarchy:
+                        self.context.hierarchy = temp_context.hierarchy
+                        self.gl_widget.bone_transforms = self.gl_widget.compute_bone_transforms(
+                            temp_context.hierarchy
+                        )
+                        hierarchy_loaded = True
+                    else:
+                        QMessageBox.warning(
+                            self,
+                            "No Hierarchy Found",
+                            "Selected file does not contain a hierarchy.",
+                        )
+
+            # Update button color to green if hierarchy was loaded
+            if hierarchy_loaded:
+                self.skeleton_button.setStyleSheet("background-color: green; color: white;")
+                QMessageBox.information(
+                    self,
+                    "Skeleton Loaded",
+                    f"Skeleton loaded with {len(self.context.hierarchy.pivots)} bones.",
+                )
+
+        self.gl_widget.update()
+
+    def _auto_load_skeleton(self):
+        """Automatically load skeleton from the same archive if it exists."""
+        # Check if we have a hierarchy name to search for
+        hierarchy_name = self.context.hlod.header.hierarchy_name if self.context.hlod else None
+
+        if not hierarchy_name or not self.archive:
+            return
+
+        # Try to find and load the hierarchy from the archive
+        try:
+            for file in self.archive.file_list():
+                if file.lower().endswith(".w3d"):
+                    file_name = file.split("\\")[-1]
+                    if hierarchy_name.lower() in file_name.lower():
+                        # Load hierarchy from archive
+                        w3d_data = self.archive.read_file(file)
+                        temp_context = DataContext()
+                        load_file(temp_context, w3d_data)
+
+                        if temp_context.hierarchy:
+                            self.context.hierarchy = temp_context.hierarchy
+                            self.gl_widget.bone_transforms = (
+                                self.gl_widget.compute_bone_transforms(temp_context.hierarchy)
+                            )
+                            # Update button color to green
+                            if hasattr(self, "skeleton_button"):
+                                self.skeleton_button.setStyleSheet(
+                                    "background-color: green; color: white;"
+                                )
+                            break
+        except Exception as e:
+            # Silently fail if auto-load doesn't work
+            pass
 
     def _zoom_in(self):
         self.gl_widget.zoom += 5.0
