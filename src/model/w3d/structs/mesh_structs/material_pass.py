@@ -3,6 +3,7 @@
 
 from model.common.structs.rgba import RGBA
 from model.w3d.io_binary import (
+    Vector,
     read_chunk_head,
     read_list,
     read_long,
@@ -29,7 +30,7 @@ class TextureStage:
     def __init__(self, tx_ids=None, per_face_tx_coords=None, tx_coords=None):
         self.tx_ids = tx_ids if tx_ids is not None else []
         self.per_face_tx_coords = per_face_tx_coords if per_face_tx_coords is not None else []
-        self.tx_coords = tx_coords if tx_coords is not None else []
+        self.tx_coords: list[list[Vector]] = tx_coords if tx_coords is not None else []
 
     @staticmethod
     def read(io_stream, chunk_end):
@@ -86,8 +87,8 @@ class MaterialPass:
         self.dig = dig if dig is not None else []
         self.scg = scg if scg is not None else []
         self.shader_material_ids = shader_material_ids if shader_material_ids is not None else []
-        self.tx_stages = tx_stages if tx_stages is not None else []
-        self.tx_coords = tx_coords if tx_coords is not None else []
+        self.tx_stages: list[TextureStage] = tx_stages if tx_stages is not None else []
+        self.tx_coords: list[Vector] = tx_coords if tx_coords is not None else []
         self.tx_coords_2 = tx_coords if tx_coords is not None else []
 
     @staticmethod

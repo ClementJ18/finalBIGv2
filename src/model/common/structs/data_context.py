@@ -1,6 +1,12 @@
 # <pep8 compliant>
 # Written by Stephan Vedder and Michael Schnabel
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from model.common.structs.hlod import HLod
+    from model.common.structs.mesh import Mesh
+
 
 class DataContext:
     def __init__(
@@ -19,9 +25,9 @@ class DataContext:
         self.container_name = container_name
         self.rig = rig
         self.hierarchy = hierarchy
-        self.meshes = meshes if meshes is not None else []
+        self.meshes: list[Mesh] = meshes if meshes is not None else []
         self.dazzles = dazzles if dazzles is not None else []
-        self.hlod = hlod
+        self.hlod: HLod = hlod
         self.textures = textures if textures is not None else []
         self.collision_boxes = collision_boxes if collision_boxes is not None else []
         self.animation = animation

@@ -1,12 +1,11 @@
 import json
 import os
-from dataclasses import asdict, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, List
 
 import platformdirs
 import qdarktheme
-from attr import dataclass
 from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
@@ -28,7 +27,7 @@ def str_to_bool(value) -> bool:
 
 
 @dataclass
-class FileList:
+class FileView:
     is_favorite: bool
     type: str
     filter: str
@@ -37,8 +36,8 @@ class FileList:
     def to_dict(self) -> dict:
         return asdict(self)
 
-    def from_dict(data: dict) -> "FileList":
-        return FileList(
+    def from_dict(data: dict) -> "FileView":
+        return FileView(
             is_favorite=data.get("is_favorite", False),
             type=data.get("type", "list"),
             filter=data.get("filter", ""),
@@ -47,30 +46,37 @@ class FileList:
 
 
 @dataclass
+class FileTab:
+    file: str
+    is_preview: bool
+
+
+@dataclass
 class Workplace:
     name: str
     archive_path: str
-    lists: dict[str, FileList] = field(default_factory=dict)
-    tabs: list[str] = field(default_factory=list)
     notes: str
     version: int
+    lists: dict[str, FileView] = field(default_factory=dict)
+    tabs: list[FileTab] = field(default_factory=list)
     search: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         data = asdict(self)
         data["lists"] = {k: v.to_dict() for k, v in self.lists.items()}
+        data["tabs"] = [asdict(tab) for tab in self.tabs]
 
         return data
 
     def from_dict(data: dict) -> "Workplace":
-        lists = {k: FileList.from_dict(v) for k, v in data.get("lists", {}).items()}
         return Workplace(
             name=data.get("name", ""),
             archive_path=data.get("archive_path", ""),
-            lists=lists,
-            tabs=data.get("tabs", []),
+            lists={k: FileView.from_dict(v) for k, v in data.get("lists", {}).items()},
+            tabs=[FileTab(**tab) for tab in data.get("tabs", [])],
             notes=data.get("notes", ""),
             version=data.get("version", 0),
+            search=data.get("search", []),
         )
 
 
@@ -286,12 +292,21 @@ class Settings:
             with open(workspace_file, "r") as f:
                 return Workplace.from_dict(json.load(f))
 
-        return Workplace("", "", {}, [], "", 0)
+        return Workplace(
+            name="",
+            archive_path="",
+            notes="",
+            version=self.workspace_version,
+            lists={},
+            tabs=[],
+            search="",
+        )
 
     def save_workspace(self, name: str, data: Workplace) -> None:
         workspace_file = self.get_workspace_path(name)
+        data = data.to_dict()
         with open(workspace_file, "w") as f:
-            json.dump(data.to_dict(), f, indent=2)
+            json.dump(data, f, indent=2)
 
     def list_recent_workspaces(self) -> list[str]:
         workspaces = []
@@ -316,6 +331,8 @@ class Settings:
         if os.path.exists(workspace_file):
             os.remove(workspace_file)
 
+        self.main.update_recent_workspace_menu()
+
     def rename_workspace(self, old_name: str, new_name: str) -> bool:
         """Rename a workspace. Returns True if successful."""
         old_path = self.get_workspace_path(old_name)
@@ -327,4 +344,5 @@ class Settings:
             return False
 
         os.rename(old_path, new_path)
+        self.main.update_recent_workspace_menu()
         return True

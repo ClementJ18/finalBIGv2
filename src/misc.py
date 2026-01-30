@@ -19,10 +19,10 @@ from PyQt6.QtWidgets import (
 )
 
 from file_views import file_view_mapping
-from tabs.generic_tab import GenericTab
 
 if TYPE_CHECKING:
     from main import MainWindow
+    from tabs.generic_tab import GenericTab
 
 
 class SearchBox(QComboBox):
@@ -101,7 +101,7 @@ class TabWidget(QTabWidget):
 
         self.removeTab(index)
 
-    def widget(self, index) -> GenericTab:
+    def widget(self, index) -> "GenericTab":
         return super().widget(index)
 
 

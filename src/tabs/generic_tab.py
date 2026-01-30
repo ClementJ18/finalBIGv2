@@ -91,7 +91,7 @@ class GenericTab(QWidget):
     def gather_files(self) -> list:
         return [self.name]
 
-    def open_externally(self):
+    def open_externally(self, monitor=True):
         layout = QHBoxLayout()
 
         data = QTextEdit(self)
@@ -111,10 +111,11 @@ class GenericTab(QWidget):
         self.path = os.path.join(self.tmp.name, os.path.basename(self.name))
         QDesktopServices.openUrl(QUrl.fromLocalFile(self.path))
 
-        self.observer = Observer()
-        self.observer.schedule(SaveEventHandler(self, self.name, self.path), self.tmp.name)
+        if monitor:
+            self.observer = Observer()
+            self.observer.schedule(SaveEventHandler(self, self.name, self.path), self.tmp.name)
+            self.observer.start()
 
-        self.observer.start()
         self.external = True
 
     def generate_controller(self):

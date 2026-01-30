@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
 from file_views import get_file_view_class
 from misc import NewTabDialog, WrappingInputDialog
 from search import SearchManager
-from settings import FileList, Settings, Workplace
+from settings import FileTab, FileView, Settings, Workplace
 from tabs import get_tab_from_file_type
 from ui import HasUiElements, generate_ui
 from utils.utils import (
@@ -270,16 +270,18 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
     def _save_workspace(self, workspace_name: str):
         existing_workspace = self.settings.get_workspace(workspace_name)
         new_workspace = Workplace(
+            name=workspace_name,
             archive_path=self.path,
-            notes=existing_workspace.notes if existing_workspace else "",
             version=self.settings.workspace_version,
+            notes=existing_workspace.notes if existing_workspace else "",
             lists={},
             tabs=[],
+            search=[self.search.itemText(i) for i in range(self.search.count())],
         )
 
         for i in range(self.listwidget.count() - 1):
             file_list_widget = self.listwidget.widget(i)
-            file_list = FileList(
+            file_list = FileView(
                 is_favorite=file_list_widget.is_favorite,
                 type=file_list_widget.view_type,
                 filter=file_list_widget.filter,
@@ -295,9 +297,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         for i in range(self.tabs.count()):
             tab = self.tabs.widget(i)
-            new_workspace.tabs.append(tab.name)
-
-        new_workspace.search = [self.search.itemText(i) for i in range(self.search.count())]
+            new_workspace.tabs.append(FileTab(file=tab.name, is_preview=tab.preview))
 
         self.settings.save_workspace(workspace_name, new_workspace)
         add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
@@ -332,8 +332,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.search.addItems(workspace.search)
 
         def update_tab():
-            for tab_name in workspace.tabs:
-                self._create_tab(tab_name, preview=False)
+            for tab in workspace.tabs:
+                self._create_tab(tab.file, preview=tab.is_preview)
 
         QTimer.singleShot(0, update_tab)
 
@@ -1002,6 +1002,11 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.archive.extract(path, files=files)
         self.settings.last_dir = path
         QMessageBox.information(self, "Done", "Filtered files have been extracted")
+
+    def open_externally(self):
+        name = self.listwidget.active_list.current_item_text()
+        tab = get_tab_from_file_type(name)(self, self.archive, name, False)
+        tab.open_externally()
 
     def _find_tab_index(self, name: str, preview: bool):
         for x in range(self.tabs.count()):

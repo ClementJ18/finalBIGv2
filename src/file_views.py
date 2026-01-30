@@ -6,11 +6,10 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMenu,
+    QTabWidget,
     QTreeWidget,
     QTreeWidgetItem,
 )
-
-from misc import TabWidget
 
 if TYPE_CHECKING:
     from main import MainWindow
@@ -92,6 +91,7 @@ class ListFileView(QListWidget, FileViewAbstract):
         menu.addAction("Extract selection", self.main.extract)
         menu.addAction("Rename file", self.main.rename)
         menu.addAction("Copy file name", self.main.copy_name)
+        menu.addAction("Open Externally", self.main.open_externally)
         if self.is_favorite:
             menu.addAction("Remove from favorites", self.main.remove_favorites)
         else:
@@ -199,6 +199,7 @@ class TreeFileView(QTreeWidget, FileViewAbstract):
         menu.addAction("Extract selection", self.main.extract)
         menu.addAction("Rename file", self.main.rename)
         menu.addAction("Copy file name", self.main.copy_name)
+        menu.addAction("Open Externally", self.main.open_externally)
         if self.is_favorite:
             menu.addAction("Remove from favorites", self.main.remove_favorites)
         else:
@@ -394,7 +395,7 @@ def get_file_view_class(view_type: str) -> type[FileViewAbstract]:
     return file_view_mapping.get(view_type, ListFileView)
 
 
-class FileViewTabs(TabWidget):
+class FileViewTabs(QTabWidget):
     def __init__(self, parent: "MainWindow"):
         super().__init__(parent)
         self.favorite_list: FileViewAbstract = None
@@ -456,3 +457,10 @@ class FileViewTabs(TabWidget):
 
     def widget(self, index) -> FileViewAbstract:
         return super().widget(index)
+
+    def remove_tab(self, index):
+        widget = self.widget(index)
+        if widget is not None:
+            widget.deleteLater()
+
+        self.removeTab(index)

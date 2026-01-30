@@ -171,14 +171,14 @@ class Mesh:
         self.tangents = []
         self.bitangents = []
         self.vert_infs = []
-        self.triangles = []
+        self.triangles: list[Triangle] = []
         self.shade_ids = []
         self.mat_info = None
         self.shaders = []
         self.vert_materials = []
         self.textures = []
         self.shader_materials = []
-        self.material_passes = []
+        self.material_passes: list[MaterialPass] = []
         self.aabbtree = None
         self.prelit_unlit = None
         self.prelit_vertex = None

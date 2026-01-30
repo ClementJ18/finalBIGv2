@@ -4,11 +4,11 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
 
-from file_views import FileViewAbstract
 from misc import ArchiveSearchThread
 from utils.utils import SEARCH_HISTORY_MAX
 
 if TYPE_CHECKING:
+    from file_views import FileViewAbstract
     from main import MainWindow
 
 
@@ -88,7 +88,7 @@ class SearchManager:
 
     def filter_list(
         self: "MainWindow",
-        file_list: FileViewAbstract,
+        file_list: "FileViewAbstract",
         search: str,
         invert: bool,
         use_regex: bool,
@@ -98,7 +98,7 @@ class SearchManager:
 
     def _filter_list(
         self: "MainWindow",
-        file_list: FileViewAbstract,
+        file_list: "FileViewAbstract",
         search: str,
         invert: bool,
         use_regex: bool,

@@ -263,10 +263,11 @@ def create_menu(main: "MainWindow"):
         view_action.setData(view_type)
         view_action.setChecked(main.settings.default_file_list_type == view_type)
         view_action.triggered.connect(
-            lambda checked, vtype=view_type: main.settings.set_default_file_list_type(vtype)
+            lambda _, vtype=view_type: main.settings.set_default_file_list_type(vtype)
         )
         view_action_group.addAction(view_action)
         main.default_view_menu.addAction(view_action)
+        main.lock_exceptions.append(view_action)
 
     main.lock_exceptions.append(option_menu.addAction("&Set encoding", main.settings.set_encoding))
 
