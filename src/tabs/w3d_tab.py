@@ -1,6 +1,7 @@
 import base64
 import io
 import math
+import os
 
 import numpy as np
 import pyBIG
@@ -72,13 +73,67 @@ from model.common.structs.data_context import DataContext
 from model.w3d.import_w3d import load_file
 from tabs.generic_tab import GenericTab
 
+# Constants
+ROTATION_STEP = 5.0  # Degrees per arrow key press
+MOUSE_SENSITIVITY = 0.5  # Mouse rotation sensitivity
+ZOOM_STEP = 2.0  # Zoom increment
+ZOOM_MIN = -5.0  # Minimum zoom distance
+ZOOM_MAX = -400.0  # Maximum zoom distance
+CAMERA_FOV = 45.0  # Field of view in degrees
+CAMERA_PADDING = 1.5  # Bounding box padding multiplier
+
+# Button styling
+BUTTON_SIZE_SMALL = 25
+BUTTON_HEIGHT_SMALL = 20
+BUTTON_STYLE_UNLOADED = "background-color: red; color: white;"
+BUTTON_STYLE_LOADED = "background-color: green; color: white;"
+
+
+class TransformedVertex:
+    """Lightweight vertex container for skinned vertices."""
+
+    __slots__ = ("x", "y", "z")
+
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+LIGHTING_PRESETS = {
+    "Default": {
+        "position": [0.5, 1.0, 1.0, 0.0],
+        "ambient": [0.2, 0.2, 0.2, 1.0],
+        "diffuse": [0.8, 0.8, 0.8, 1.0],
+    },
+    "Bright": {
+        "position": [0.5, 1.0, 1.0, 0.0],
+        "ambient": [0.4, 0.4, 0.4, 1.0],
+        "diffuse": [1.0, 1.0, 1.0, 1.0],
+    },
+    "Moody": {
+        "position": [-0.2, 0.5, 0.2, 0.0],
+        "ambient": [0.05, 0.05, 0.1, 1.0],
+        "diffuse": [0.3, 0.3, 0.5, 1.0],
+    },
+    "Top Light": {
+        "position": [0.0, 2.0, 0.0, 0.0],
+        "ambient": [0.1, 0.1, 0.1, 1.0],
+        "diffuse": [0.8, 0.8, 0.7, 1.0],
+    },
+    "Side Light": {
+        "position": [2.0, 0.0, 0.0, 0.0],
+        "ambient": [0.1, 0.1, 0.1, 1.0],
+        "diffuse": [0.7, 0.8, 0.8, 1.0],
+    },
+}
+
 
 class GLWidget(QOpenGLWidget):
     def __init__(self, parent, data_context: DataContext, subobject_data):
         super().__init__(parent)
         self.data_context = data_context
         self.subobject_data = subobject_data
-        self.meshes = []
         self.rotation_matrix = np.eye(4, dtype=np.float32)
         self.zoom = -50.0
         self.bbox_center = (0.0, 0.0, 0.0)
@@ -153,10 +208,12 @@ class GLWidget(QOpenGLWidget):
             else:
                 glDisable(GL_TEXTURE_2D)
 
-            if mesh.material_passes[0].tx_coords:
-                tx_coords = mesh.material_passes[0].tx_coords
+            # Cache material pass to avoid repeated list access
+            material_pass = mesh.material_passes[0]
+            if material_pass.tx_coords:
+                tx_coords = material_pass.tx_coords
             else:
-                tx_coords = mesh.material_passes[0].tx_stages[0].tx_coords[0]
+                tx_coords = material_pass.tx_stages[0].tx_coords[0]
 
             # Determine which vertices to use
             use_skinning = self.bone_transforms and mesh.vert_infs
@@ -194,74 +251,68 @@ class GLWidget(QOpenGLWidget):
         if not self.data_context.meshes:
             return
 
-        min_x = min_y = min_z = float("inf")
-        max_x = max_y = max_z = float("-inf")
-
+        # Collect all vertices into a numpy array for efficient min/max computation
+        all_verts = []
         for mesh in self.data_context.meshes:
             for v in mesh.verts:
-                min_x = min(min_x, v.x)
-                max_x = max(max_x, v.x)
-                min_y = min(min_y, v.y)
-                max_y = max(max_y, v.y)
-                min_z = min(min_z, v.z)
-                max_z = max(max_z, v.z)
+                all_verts.append([v.x, v.y, v.z])
 
-        self.bbox_center = (
-            (min_x + max_x) / 2,
-            (min_y + max_y) / 2,
-            (min_z + max_z) / 2,
-        )
+        if not all_verts:
+            return
 
-        max_dim = max(max_x - min_x, max_y - min_y, max_z - min_z)
-        fov = 45.0
-        padding = 1.5
-        self.zoom = -max_dim * padding / (2 * math.tan(math.radians(fov / 2)))
+        verts_array = np.array(all_verts)
+        bbox_min = verts_array.min(axis=0)
+        bbox_max = verts_array.max(axis=0)
+
+        self.bbox_center = tuple((bbox_min + bbox_max) / 2)
+
+        max_dim = np.max(bbox_max - bbox_min)
+        self.zoom = -max_dim * CAMERA_PADDING / (2 * math.tan(math.radians(CAMERA_FOV / 2)))
 
         self.rotation_matrix = np.eye(4, dtype=np.float32)
 
+    def _create_rotation_matrix_y(self, angle_deg):
+        """Create a rotation matrix around the Y-axis."""
+        rot = np.eye(4, dtype=np.float32)
+        rad = np.radians(angle_deg)
+        cos_a, sin_a = np.cos(rad), np.sin(rad)
+        rot[0, 0] = cos_a
+        rot[0, 2] = sin_a
+        rot[2, 0] = -sin_a
+        rot[2, 2] = cos_a
+        return rot
+
+    def _create_rotation_matrix_x(self, angle_deg):
+        """Create a rotation matrix around the X-axis."""
+        rot = np.eye(4, dtype=np.float32)
+        rad = np.radians(angle_deg)
+        cos_a, sin_a = np.cos(rad), np.sin(rad)
+        rot[1, 1] = cos_a
+        rot[1, 2] = -sin_a
+        rot[2, 1] = sin_a
+        rot[2, 2] = cos_a
+        return rot
+
     def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key.Key_Left:
-            angle = -5
-            rot = np.eye(4, dtype=np.float32)
-            rad = np.radians(angle)
-            rot[0, 0] = np.cos(rad)
-            rot[0, 2] = np.sin(rad)
-            rot[2, 0] = -np.sin(rad)
-            rot[2, 2] = np.cos(rad)
+        key = event.key()
+
+        # Rotation key mappings: (axis_function, angle)
+        rotation_keys = {
+            Qt.Key.Key_Left: (self._create_rotation_matrix_y, ROTATION_STEP),
+            Qt.Key.Key_Right: (self._create_rotation_matrix_y, -ROTATION_STEP),
+            Qt.Key.Key_Up: (self._create_rotation_matrix_x, -ROTATION_STEP),
+            Qt.Key.Key_Down: (self._create_rotation_matrix_x, ROTATION_STEP),
+        }
+
+        if key in rotation_keys:
+            create_matrix, angle = rotation_keys[key]
+            rot = create_matrix(angle)
             self.rotation_matrix = rot @ self.rotation_matrix
-        elif event.key() == Qt.Key.Key_Right:
-            angle = 5
-            rot = np.eye(4, dtype=np.float32)
-            rad = np.radians(angle)
-            rot[0, 0] = np.cos(rad)
-            rot[0, 2] = np.sin(rad)
-            rot[2, 0] = -np.sin(rad)
-            rot[2, 2] = np.cos(rad)
-            self.rotation_matrix = rot @ self.rotation_matrix
-        elif event.key() == Qt.Key.Key_Up:
-            angle = -5
-            rot = np.eye(4, dtype=np.float32)
-            rad = np.radians(angle)
-            rot[1, 1] = np.cos(rad)
-            rot[1, 2] = -np.sin(rad)
-            rot[2, 1] = np.sin(rad)
-            rot[2, 2] = np.cos(rad)
-            self.rotation_matrix = rot @ self.rotation_matrix
-        elif event.key() == Qt.Key.Key_Down:
-            angle = 5
-            rot = np.eye(4, dtype=np.float32)
-            rad = np.radians(angle)
-            rot[1, 1] = np.cos(rad)
-            rot[1, 2] = -np.sin(rad)
-            rot[2, 1] = np.sin(rad)
-            rot[2, 2] = np.cos(rad)
-            self.rotation_matrix = rot @ self.rotation_matrix
-        elif event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal, Qt.Key.Key_PageUp):
-            self.zoom += 2.0
-            self.zoom = min(-5.0, self.zoom)
-        elif event.key() in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore, Qt.Key.Key_PageDown):
-            self.zoom -= 2.0
-            self.zoom = max(-400.0, self.zoom)
+        elif key in (Qt.Key.Key_Plus, Qt.Key.Key_Equal, Qt.Key.Key_PageUp):
+            self.zoom = min(ZOOM_MIN, self.zoom + ZOOM_STEP)
+        elif key in (Qt.Key.Key_Minus, Qt.Key.Key_Underscore, Qt.Key.Key_PageDown):
+            self.zoom = max(ZOOM_MAX, self.zoom - ZOOM_STEP)
+
         self.update()
 
     def mousePressEvent(self, event: QMouseEvent):
@@ -278,22 +329,8 @@ class GLWidget(QOpenGLWidget):
         dy = pos.y() - self.last_mouse_pos.y()
 
         if abs(dx) > 0.01 or abs(dy) > 0.01:
-            angle_y = dx * 0.5
-            rot_y = np.eye(4, dtype=np.float32)
-            rad_y = np.radians(angle_y)
-            rot_y[0, 0] = np.cos(rad_y)
-            rot_y[0, 2] = np.sin(rad_y)
-            rot_y[2, 0] = -np.sin(rad_y)
-            rot_y[2, 2] = np.cos(rad_y)
-
-            angle_x = dy * 0.5
-            rot_x = np.eye(4, dtype=np.float32)
-            rad_x = np.radians(angle_x)
-            rot_x[1, 1] = np.cos(rad_x)
-            rot_x[1, 2] = -np.sin(rad_x)
-            rot_x[2, 1] = np.sin(rad_x)
-            rot_x[2, 2] = np.cos(rad_x)
-
+            rot_y = self._create_rotation_matrix_y(-dx * MOUSE_SENSITIVITY)
+            rot_x = self._create_rotation_matrix_x(dy * MOUSE_SENSITIVITY)
             self.rotation_matrix = rot_y @ self.rotation_matrix @ rot_x
 
         self.last_mouse_pos = pos
@@ -304,8 +341,8 @@ class GLWidget(QOpenGLWidget):
 
     def wheelEvent(self, event: QWheelEvent):
         delta = event.angleDelta().y() / 120
-        self.zoom += delta * 2.0
-        self.zoom = min(-5.0, max(-400.0, self.zoom))
+        self.zoom += delta * ZOOM_STEP
+        self.zoom = min(ZOOM_MIN, max(ZOOM_MAX, self.zoom))
         self.update()
 
     def set_camera_preset(self, preset_name: str):
@@ -313,19 +350,8 @@ class GLWidget(QOpenGLWidget):
             rot_x, rot_y = self.camera_presets[preset_name]
             self.rotation_matrix = np.eye(4, dtype=np.float32)
 
-            rad_y = np.radians(rot_y)
-            rot_y_mat = np.eye(4, dtype=np.float32)
-            rot_y_mat[0, 0] = np.cos(rad_y)
-            rot_y_mat[0, 2] = np.sin(rad_y)
-            rot_y_mat[2, 0] = -np.sin(rad_y)
-            rot_y_mat[2, 2] = np.cos(rad_y)
-
-            rad_x = np.radians(rot_x)
-            rot_x_mat = np.eye(4, dtype=np.float32)
-            rot_x_mat[1, 1] = np.cos(rad_x)
-            rot_x_mat[1, 2] = -np.sin(rad_x)
-            rot_x_mat[2, 1] = np.sin(rad_x)
-            rot_x_mat[2, 2] = np.cos(rad_x)
+            rot_y_mat = self._create_rotation_matrix_y(rot_y)
+            rot_x_mat = self._create_rotation_matrix_x(rot_x)
 
             self.rotation_matrix = rot_y_mat @ rot_x_mat
             self.update()
@@ -342,30 +368,10 @@ class GLWidget(QOpenGLWidget):
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
 
-        if self.lighting_preset == "Default":
-            glLightfv(GL_LIGHT0, GL_POSITION, [0.5, 1.0, 1.0, 0.0])
-            glLightfv(GL_LIGHT0, GL_AMBIENT, [0.2, 0.2, 0.2, 1.0])
-            glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.8, 0.8, 0.8, 1.0])
-
-        elif self.lighting_preset == "Bright":
-            glLightfv(GL_LIGHT0, GL_POSITION, [0.5, 1.0, 1.0, 0.0])
-            glLightfv(GL_LIGHT0, GL_AMBIENT, [0.4, 0.4, 0.4, 1.0])
-            glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])
-
-        elif self.lighting_preset == "Moody":
-            glLightfv(GL_LIGHT0, GL_POSITION, [-0.2, 0.5, 0.2, 0.0])
-            glLightfv(GL_LIGHT0, GL_AMBIENT, [0.05, 0.05, 0.1, 1.0])
-            glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.3, 0.3, 0.5, 1.0])
-
-        elif self.lighting_preset == "Top Light":
-            glLightfv(GL_LIGHT0, GL_POSITION, [0.0, 2.0, 0.0, 0.0])
-            glLightfv(GL_LIGHT0, GL_AMBIENT, [0.1, 0.1, 0.1, 1.0])
-            glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.8, 0.8, 0.7, 1.0])
-
-        elif self.lighting_preset == "Side Light":
-            glLightfv(GL_LIGHT0, GL_POSITION, [2.0, 0.0, 0.0, 0.0])
-            glLightfv(GL_LIGHT0, GL_AMBIENT, [0.1, 0.1, 0.1, 1.0])
-            glLightfv(GL_LIGHT0, GL_DIFFUSE, [0.7, 0.8, 0.8, 1.0])
+        preset = LIGHTING_PRESETS.get(self.lighting_preset, LIGHTING_PRESETS["Default"])
+        glLightfv(GL_LIGHT0, GL_POSITION, preset["position"])
+        glLightfv(GL_LIGHT0, GL_AMBIENT, preset["ambient"])
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, preset["diffuse"])
 
     def compute_bone_transforms(self, hierarchy):
         """Compute world-space bone transformation matrices from hierarchy pivots."""
@@ -418,13 +424,14 @@ class GLWidget(QOpenGLWidget):
         if weight2 > 0 and bone_idx2 < len(self.bone_transforms):
             result += (self.bone_transforms[bone_idx2] @ v) * weight2
 
-        class TransformedVertex:
-            def __init__(self, x, y, z):
-                self.x = x
-                self.y = y
-                self.z = z
-
         return TransformedVertex(result[0], result[1], result[2])
+
+    def _setup_texture_parameters(self):
+        """Configure standard OpenGL texture parameters."""
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
 
     def load_texture(self, image_data: bytes) -> int:
         """Load a texture from file and return texture ID."""
@@ -447,16 +454,121 @@ class GLWidget(QOpenGLWidget):
             img_data,
         )
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        self._setup_texture_parameters()
 
         return texture_id
 
+    def set_subobject_visibility(self, name: str, visible: bool):
+        """Set visibility for a specific subobject."""
+        self.subobject_visibility[name] = visible
+        self.update()
+
+    def set_texture_for_subobject(self, name: str, image_data: bytes):
+        """Load and assign a texture to a subobject."""
+        if name in self.textures:
+            texture_id = self.load_texture(image_data)
+            self.textures[name]["texture"] = texture_id
+            self.textures[name]["image_data"] = image_data
+            self.update()
+
+    def get_texture_info(self, name: str):
+        """Get texture information for a subobject."""
+        return self.textures.get(name)
+
+    def get_all_textures(self):
+        """Get all texture data for serialization."""
+        return {name: info.copy() for name, info in self.textures.items()}
+
+    def set_bone_transforms(self, bone_transforms):
+        """Set bone transformation matrices."""
+        self.bone_transforms = bone_transforms
+        self.update()
+
+    def adjust_zoom(self, delta: float):
+        """Adjust zoom level by the given delta."""
+        self.zoom += delta
+        self.zoom = min(ZOOM_MIN, max(ZOOM_MAX, self.zoom))
+        self.update()
+
 
 class W3DTab(GenericTab):
+    def _find_files_in_archive(self, archive, extensions, name_pattern=None):
+        """Find files in archive matching extensions and optional name pattern.
+
+        Args:
+            archive: pyBIG archive object
+            extensions: tuple of file extensions (e.g., ('.dds', '.tga'))
+            name_pattern: optional substring to match in filename (case-insensitive)
+
+        Returns:
+            dict: mapping of base filename (without extension) to full file path
+        """
+        file_map = {}
+        for file in archive.file_list():
+            if not file.lower().endswith(extensions):
+                continue
+
+            file_name = os.path.basename(file)
+            if name_pattern and name_pattern.lower() not in file_name.lower():
+                continue
+
+            base_name = file_name.split(".")[0].lower()
+            file_map[base_name] = file
+        return file_map
+
+    def _decode_base64_data(self, encoded_data):
+        """Safely decode base64 data, returning None on error."""
+        try:
+            return base64.b64decode(encoded_data)
+        except Exception:
+            return None
+
+    def _get_base_filename(self, filename):
+        """Extract base filename without extension (e.g., 'texture.dds' -> 'texture')."""
+        return os.path.basename(filename).split(".")[0].lower()
+
+    def _set_button_loaded(self, button_name):
+        """Mark a button as loaded (green)."""
+        if button_name in self.texture_buttons:
+            self.texture_buttons[button_name].setStyleSheet(BUTTON_STYLE_LOADED)
+
+    def _set_button_unloaded(self, button_name):
+        """Mark a button as unloaded (red)."""
+        if button_name in self.texture_buttons:
+            self.texture_buttons[button_name].setStyleSheet(BUTTON_STYLE_UNLOADED)
+
+    def _create_small_button(self, text, callback):
+        """Create a small button with standard styling."""
+        button = QPushButton(text)
+        button.setMaximumWidth(BUTTON_SIZE_SMALL)
+        button.setMaximumHeight(BUTTON_HEIGHT_SMALL)
+        button.setStyleSheet(BUTTON_STYLE_UNLOADED)
+        button.clicked.connect(callback)
+        return button
+
+    def _apply_skeleton_data(self, w3d_data, update_button=True):
+        """Load skeleton from W3D data and update the GL widget.
+
+        Args:
+            w3d_data: Raw W3D file bytes
+            update_button: Whether to update the skeleton button style
+
+        Returns:
+            bool: True if skeleton was loaded successfully
+        """
+        temp_context = DataContext()
+        load_file(temp_context, w3d_data)
+
+        if temp_context.hierarchy:
+            self.context.hierarchy = temp_context.hierarchy
+            self.skeleton_data = w3d_data
+            bone_transforms = self.gl_widget.compute_bone_transforms(temp_context.hierarchy)
+            self.gl_widget.set_bone_transforms(bone_transforms)
+            if update_button and hasattr(self, "skeleton_button"):
+                self.skeleton_button.setStyleSheet(BUTTON_STYLE_LOADED)
+            return True
+        return False
+
     def generate_layout(self):
         layout = QVBoxLayout()
         self.setLayout(layout)
@@ -488,8 +600,8 @@ class W3DTab(GenericTab):
         control_bar.addWidget(zoom_in_btn)
         control_bar.addWidget(zoom_out_btn)
 
-        zoom_in_btn.clicked.connect(self._zoom_in)
-        zoom_out_btn.clicked.connect(self._zoom_out)
+        zoom_in_btn.clicked.connect(lambda: self._zoom(5.0))
+        zoom_out_btn.clicked.connect(lambda: self._zoom(-5.0))
 
         preset_combo = QComboBox()
         preset_combo.addItems(["Front", "Back", "Left", "Right", "Top", "Bottom"])
@@ -543,19 +655,15 @@ class W3DTab(GenericTab):
                 )
                 info_layout.addWidget(checkbox)
                 self.subobject_checkboxes[subobject["name"]] = checkbox
-                self.gl_widget.subobject_visibility[subobject["name"]] = True
+                self.gl_widget.set_subobject_visibility(subobject["name"], True)
 
                 texture_row = QHBoxLayout()
                 texture_label = QLabel(f"  - {subobject['texture']}")
                 texture_label.setWordWrap(True)
                 texture_row.addWidget(texture_label, stretch=1)
 
-                load_texture_btn = QPushButton("+")
-                load_texture_btn.setMaximumWidth(25)
-                load_texture_btn.setMaximumHeight(20)
-                load_texture_btn.setStyleSheet("background-color: red; color: white;")
-                load_texture_btn.clicked.connect(
-                    lambda _, name=subobject["name"]: self.load_texture_for_subobject(name)
+                load_texture_btn = self._create_small_button(
+                    "+", lambda _, name=subobject["name"]: self.load_texture_for_subobject(name)
                 )
                 texture_row.addWidget(load_texture_btn)
 
@@ -572,14 +680,8 @@ class W3DTab(GenericTab):
         skeleton_label.setWordWrap(True)
         skeleton_row.addWidget(skeleton_label, stretch=1)
 
-        load_skeleton_btn = QPushButton("+")
-        load_skeleton_btn.setMaximumWidth(25)
-        load_skeleton_btn.setMaximumHeight(20)
-        load_skeleton_btn.setStyleSheet("background-color: red; color: white;")
-        load_skeleton_btn.clicked.connect(self._load_skeleton)
-        skeleton_row.addWidget(load_skeleton_btn)
-
-        self.skeleton_button = load_skeleton_btn
+        self.skeleton_button = self._create_small_button("+", self._load_skeleton)
+        skeleton_row.addWidget(self.skeleton_button)
 
         info_layout.addLayout(skeleton_row)
 
@@ -598,8 +700,7 @@ class W3DTab(GenericTab):
     def _toggle_subobject(self, name, state):
         """Toggle visibility of a subobject and re-render."""
         is_visible = state == Qt.CheckState.Checked.value
-        self.gl_widget.subobject_visibility[name] = is_visible
-        self.gl_widget.update()
+        self.gl_widget.set_subobject_visibility(name, is_visible)
 
     def load_texture_for_subobject(self, subobject_name):
         """Prompt user to select a texture file for the subobject."""
@@ -614,56 +715,43 @@ class W3DTab(GenericTab):
             is_archive = file_path.lower().endswith(".big")
             if is_archive:
                 texture_archive = pyBIG.InDiskArchive(file_path)
+                archive_texture_map = self._find_files_in_archive(
+                    texture_archive, (".dds", ".tga")
+                )
+
                 loaded_count = 0
-
-                archive_texture_map = {}
-                for file in texture_archive.file_list():
-                    if not file.lower().endswith((".dds", ".tga")):
-                        continue
-                    file_name = file.split("\\")[-1].lower()
-                    texture_base_name = file_name.split(".")[0]
-                    archive_texture_map[texture_base_name] = file
-
-                for subobj_name, texture_info in self.gl_widget.textures.items():
-                    texture_base_name = texture_info["file_name"].split(".")[0].lower()
+                for subobj_name in self.gl_widget.textures.keys():
+                    texture_info = self.gl_widget.get_texture_info(subobj_name)
+                    texture_base_name = self._get_base_filename(texture_info["file_name"])
 
                     if texture_base_name in archive_texture_map:
                         image_data = texture_archive.read_file(
                             archive_texture_map[texture_base_name]
                         )
-                        texture_id = self.gl_widget.load_texture(image_data)
-                        self.gl_widget.textures[subobj_name]["texture"] = texture_id
-                        self.gl_widget.textures[subobj_name]["image_data"] = image_data
+                        self.gl_widget.set_texture_for_subobject(subobj_name, image_data)
                         loaded_count += 1
+                        self._set_button_loaded(subobj_name)
 
-                        if subobj_name in self.texture_buttons:
-                            self.texture_buttons[subobj_name].setStyleSheet(
-                                "background-color: green; color: white;"
-                            )
-
-                if loaded_count == 0:
-                    QMessageBox.warning(
-                        self, "No Textures Found", "No matching textures found in archive."
-                    )
-                elif loaded_count > 1:
-                    QMessageBox.information(
-                        self,
-                        "Textures Loaded",
-                        f"Successfully loaded {loaded_count} texture(s) from archive.",
-                    )
+                self._show_texture_load_result(loaded_count)
             else:
                 with open(file_path, "rb") as f:
                     image_data = f.read()
-                    texture_id = self.gl_widget.load_texture(image_data)
-                    self.gl_widget.textures[subobject_name]["texture"] = texture_id
-                    self.gl_widget.textures[subobject_name]["image_data"] = image_data
+                    self.gl_widget.set_texture_for_subobject(subobject_name, image_data)
 
-                    if subobject_name in self.texture_buttons:
-                        self.texture_buttons[subobject_name].setStyleSheet(
-                            "background-color: green; color: white;"
-                        )
+                    self._set_button_loaded(subobject_name)
 
-        self.gl_widget.update()
+    def _show_texture_load_result(self, loaded_count):
+        """Display appropriate message based on texture load results."""
+        if loaded_count == 0:
+            QMessageBox.warning(
+                self, "No Textures Found", "No matching textures found in archive."
+            )
+        elif loaded_count > 1:
+            QMessageBox.information(
+                self,
+                "Textures Loaded",
+                f"Successfully loaded {loaded_count} texture(s) from archive.",
+            )
 
     def _load_skeleton(self):
         """Prompt user to select a skeleton/hierarchy file."""
@@ -685,24 +773,15 @@ class W3DTab(GenericTab):
                 )
 
                 if hierarchy_name:
-                    for file in hierarchy_archive.file_list():
-                        if file.lower().endswith(".w3d"):
-                            file_name = file.split("\\")[-1]
-                            if hierarchy_name.lower() in file_name.lower():
-                                w3d_data = hierarchy_archive.read_file(file)
-                                temp_context = DataContext()
-                                load_file(temp_context, w3d_data)
+                    skeleton_files = self._find_files_in_archive(
+                        hierarchy_archive, (".w3d",), hierarchy_name
+                    )
 
-                                if temp_context.hierarchy:
-                                    self.context.hierarchy = temp_context.hierarchy
-                                    self.skeleton_data = w3d_data
-                                    self.gl_widget.bone_transforms = (
-                                        self.gl_widget.compute_bone_transforms(
-                                            temp_context.hierarchy
-                                        )
-                                    )
-                                    hierarchy_loaded = True
-                                    break
+                    for file_path in skeleton_files.values():
+                        w3d_data = hierarchy_archive.read_file(file_path)
+                        if self._apply_skeleton_data(w3d_data):
+                            hierarchy_loaded = True
+                            break
 
                     if not hierarchy_loaded:
                         QMessageBox.warning(
@@ -717,17 +796,8 @@ class W3DTab(GenericTab):
             else:
                 with open(file_path, "rb") as f:
                     w3d_data = f.read()
-                    temp_context = DataContext()
-                    load_file(temp_context, w3d_data)
-
-                    if temp_context.hierarchy:
-                        self.context.hierarchy = temp_context.hierarchy
-                        self.skeleton_data = w3d_data
-                        self.gl_widget.bone_transforms = self.gl_widget.compute_bone_transforms(
-                            temp_context.hierarchy
-                        )
-                        hierarchy_loaded = True
-                    else:
+                    hierarchy_loaded = self._apply_skeleton_data(w3d_data)
+                    if not hierarchy_loaded:
                         QMessageBox.warning(
                             self,
                             "No Hierarchy Found",
@@ -735,7 +805,7 @@ class W3DTab(GenericTab):
                         )
 
             if hierarchy_loaded:
-                self.skeleton_button.setStyleSheet("background-color: green; color: white;")
+                self.skeleton_button.setStyleSheet(BUTTON_STYLE_LOADED)
                 QMessageBox.information(
                     self,
                     "Skeleton Loaded",
@@ -752,39 +822,25 @@ class W3DTab(GenericTab):
             return
 
         try:
-            for file in self.archive.file_list():
-                if file.lower().endswith(".w3d"):
-                    file_name = file.split("\\")[-1]
-                    if hierarchy_name.lower() in file_name.lower():
-                        w3d_data = self.archive.read_file(file)
-                        temp_context = DataContext()
-                        load_file(temp_context, w3d_data)
+            skeleton_files = self._find_files_in_archive(self.archive, (".w3d",), hierarchy_name)
 
-                        if temp_context.hierarchy:
-                            self.context.hierarchy = temp_context.hierarchy
-                            self.skeleton_data = w3d_data
-                            self.gl_widget.bone_transforms = (
-                                self.gl_widget.compute_bone_transforms(temp_context.hierarchy)
-                            )
-                            if hasattr(self, "skeleton_button"):
-                                self.skeleton_button.setStyleSheet(
-                                    "background-color: green; color: white;"
-                                )
-                            break
-        except Exception as e:
+            for file_path in skeleton_files.values():
+                w3d_data = self.archive.read_file(file_path)
+                if self._apply_skeleton_data(w3d_data):
+                    break
+        except (OSError, IOError) as e:
+            # Silently fail for file I/O errors during auto-load
+            pass
+        except Exception:
+            # Log unexpected errors but don't crash
             pass
 
-    def _zoom_in(self):
-        self.gl_widget.zoom += 5.0
-        self.gl_widget.zoom = min(-5.0, self.gl_widget.zoom)
-        self.gl_widget.update()
+    def _zoom(self, delta):
+        """Adjust zoom level by the given delta."""
+        self.gl_widget.adjust_zoom(delta)
 
-    def _zoom_out(self):
-        self.gl_widget.zoom -= 5.0
-        self.gl_widget.zoom = max(-400.0, self.gl_widget.zoom)
-        self.gl_widget.update()
-
-    def _change_lighting(self, index):
+    def _change_lighting(self):
+        """Update lighting based on current combo box selection."""
         preset = self.light_combo.currentText()
         self.gl_widget.set_lighting(preset)
 
@@ -794,7 +850,7 @@ class W3DTab(GenericTab):
 
     def to_dict(self) -> dict:
         textures_data = {}
-        for subobj_name, texture_info in self.gl_widget.textures.items():
+        for subobj_name, texture_info in self.gl_widget.get_all_textures().items():
             if texture_info["texture"] is not None and texture_info["image_data"] is not None:
                 textures_data[subobj_name] = {
                     "image_data": base64.b64encode(texture_info["image_data"]).decode("utf-8")
@@ -813,40 +869,15 @@ class W3DTab(GenericTab):
             for subobj_name, texture_info in textures_data.items():
                 encoded_image = texture_info.get("image_data")
 
-                if not encoded_image or subobj_name not in self.gl_widget.textures:
+                if not encoded_image or self.gl_widget.get_texture_info(subobj_name) is None:
                     continue
 
-                try:
-                    image_data = base64.b64decode(encoded_image)
-                    texture_id = self.gl_widget.load_texture(image_data)
-                    self.gl_widget.textures[subobj_name]["texture"] = texture_id
-                    self.gl_widget.textures[subobj_name]["image_data"] = image_data
-
-                    if subobj_name in self.texture_buttons:
-                        self.texture_buttons[subobj_name].setStyleSheet(
-                            "background-color: green; color: white;"
-                        )
-                except Exception:
-                    pass
+                image_data = self._decode_base64_data(encoded_image)
+                if image_data:
+                    self.gl_widget.set_texture_for_subobject(subobj_name, image_data)
+                    self._set_button_loaded(subobj_name)
 
         if "skeleton" in data:
-            try:
-                skeleton_data = base64.b64decode(data["skeleton"])
-                temp_context = DataContext()
-                load_file(temp_context, skeleton_data)
-
-                if temp_context.hierarchy:
-                    self.context.hierarchy = temp_context.hierarchy
-                    self.skeleton_data = skeleton_data
-                    self.gl_widget.bone_transforms = self.gl_widget.compute_bone_transforms(
-                        temp_context.hierarchy
-                    )
-
-                    if hasattr(self, "skeleton_button"):
-                        self.skeleton_button.setStyleSheet(
-                            "background-color: green; color: white;"
-                        )
-            except Exception:
-                pass
-
-        self.gl_widget.update()
+            skeleton_data = self._decode_base64_data(data["skeleton"])
+            if skeleton_data:
+                self._apply_skeleton_data(skeleton_data)
