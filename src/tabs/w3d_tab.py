@@ -209,10 +209,13 @@ class GLWidget(QOpenGLWidget):
                 glDisable(GL_TEXTURE_2D)
 
             material_pass = mesh.material_passes[0]
+
+            tx_coords = []
             if material_pass.tx_coords:
                 tx_coords = material_pass.tx_coords
             else:
-                tx_coords = material_pass.tx_stages[0].tx_coords[0]
+                if material_pass.tx_stages and material_pass.tx_stages[0].tx_coords:
+                    tx_coords = material_pass.tx_stages[0].tx_coords[0]
 
             use_skinning = self.bone_transforms and mesh.vert_infs
             base_vertices = mesh.verts
@@ -221,7 +224,9 @@ class GLWidget(QOpenGLWidget):
             glBegin(GL_TRIANGLES)
             for tri in mesh.triangles:
                 for idx in tri.vert_ids:
-                    uv = tx_coords[idx]
+                    uv = None
+                    if tx_coords and idx < len(tx_coords):
+                        uv = tx_coords[idx]
 
                     if use_skinning and idx < len(mesh.vert_infs):
                         influence = mesh.vert_infs[idx]
@@ -236,7 +241,10 @@ class GLWidget(QOpenGLWidget):
                         v = mesh.verts_2[idx] if mesh.verts_2 else base_vertices[idx]
 
                     n = normals[idx] if normals and idx < len(normals) else tri.normal
-                    glTexCoord2f(uv.x, uv.y)
+
+                    if uv is not None:
+                        glTexCoord2f(uv.x, uv.y)
+
                     glNormal3f(n.x, n.y, n.z)
                     glVertex3f(v.x, v.y, v.z)
 
@@ -636,10 +644,10 @@ class W3DTab(GenericTab):
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         info_layout.addWidget(self.info_label)
 
-        subobjects_header = QLabel("<b>SubObjects:</b>")
-        info_layout.addWidget(subobjects_header)
-
         if self.subobject_data:
+            subobjects_header = QLabel("<b>SubObjects:</b>")
+            info_layout.addWidget(subobjects_header)
+
             self.subobject_checkboxes = {}
             self.texture_buttons = {}
             for subobject in self.subobject_data:
@@ -666,19 +674,20 @@ class W3DTab(GenericTab):
 
                 info_layout.addLayout(texture_row)
 
-        skeleton_header = QLabel("<b>Skeleton:</b>")
-        info_layout.addWidget(skeleton_header)
+        hierarchy_name = self.context.hlod.header.hierarchy_name if self.context.hlod else None
+        if hierarchy_name:
+            skeleton_header = QLabel("<b>Skeleton:</b>")
+            info_layout.addWidget(skeleton_header)
 
-        skeleton_row = QHBoxLayout()
-        hierarchy_name = self.context.hlod.header.hierarchy_name if self.context.hlod else "None"
-        skeleton_label = QLabel(f"  {hierarchy_name}")
-        skeleton_label.setWordWrap(True)
-        skeleton_row.addWidget(skeleton_label, stretch=1)
+            skeleton_row = QHBoxLayout()
+            skeleton_label = QLabel(f"  {hierarchy_name}")
+            skeleton_label.setWordWrap(True)
+            skeleton_row.addWidget(skeleton_label, stretch=1)
 
-        self.skeleton_button = self._create_small_button("+", self._load_skeleton)
-        skeleton_row.addWidget(self.skeleton_button)
+            self.skeleton_button = self._create_small_button("+", self._load_skeleton)
+            skeleton_row.addWidget(self.skeleton_button)
 
-        info_layout.addLayout(skeleton_row)
+            info_layout.addLayout(skeleton_row)
 
         info_layout.addStretch()
         return info_container
@@ -688,7 +697,8 @@ class W3DTab(GenericTab):
         subobjects = []
 
         for mesh in self.context.meshes:
-            subobjects.append({"name": mesh.name(), "texture": mesh.textures[0].file})
+            if mesh.textures:
+                subobjects.append({"name": mesh.name(), "texture": mesh.textures[0].file})
 
         return subobjects
 
