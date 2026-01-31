@@ -41,8 +41,8 @@ from OpenGL.GL import (
     glLightfv,
     glLoadIdentity,
     glMatrixMode,
+    glMultMatrixf,
     glNormal3f,
-    glRotatef,
     glTexCoord2f,
     glTexImage2D,
     glTexParameteri,
@@ -79,8 +79,7 @@ class GLWidget(QOpenGLWidget):
         self.data_context = data_context
         self.subobject_data = subobject_data
         self.meshes = []
-        self.rot_x = 0
-        self.rot_y = 0
+        self.rotation_matrix = np.eye(4, dtype=np.float32)
         self.zoom = -50.0
         self.bbox_center = (0.0, 0.0, 0.0)
         self.last_mouse_pos = None
@@ -88,7 +87,7 @@ class GLWidget(QOpenGLWidget):
             subobject["name"]: {
                 "texture": None,
                 "file_name": subobject["texture"],
-                "image_data": None,  # Stores the raw image bytes for persistence
+                "image_data": None,
             }
             for subobject in subobject_data
         }
@@ -138,8 +137,7 @@ class GLWidget(QOpenGLWidget):
         glTranslatef(0, 0, self.zoom)
         glTranslatef(self.bbox_center[0], self.bbox_center[1], self.bbox_center[2])
 
-        glRotatef(self.rot_x, 1, 0, 0)
-        glRotatef(self.rot_y, 0, 1, 0)
+        glMultMatrixf(self.rotation_matrix.T)
 
         glTranslatef(-self.bbox_center[0], -self.bbox_center[1], -self.bbox_center[2])
 
@@ -219,18 +217,45 @@ class GLWidget(QOpenGLWidget):
         padding = 1.5
         self.zoom = -max_dim * padding / (2 * math.tan(math.radians(fov / 2)))
 
-        self.rot_x = 0
-        self.rot_y = 0
+        self.rotation_matrix = np.eye(4, dtype=np.float32)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key.Key_Left:
-            self.rot_y -= 5
+            angle = -5
+            rot = np.eye(4, dtype=np.float32)
+            rad = np.radians(angle)
+            rot[0, 0] = np.cos(rad)
+            rot[0, 2] = np.sin(rad)
+            rot[2, 0] = -np.sin(rad)
+            rot[2, 2] = np.cos(rad)
+            self.rotation_matrix = rot @ self.rotation_matrix
         elif event.key() == Qt.Key.Key_Right:
-            self.rot_y += 5
+            angle = 5
+            rot = np.eye(4, dtype=np.float32)
+            rad = np.radians(angle)
+            rot[0, 0] = np.cos(rad)
+            rot[0, 2] = np.sin(rad)
+            rot[2, 0] = -np.sin(rad)
+            rot[2, 2] = np.cos(rad)
+            self.rotation_matrix = rot @ self.rotation_matrix
         elif event.key() == Qt.Key.Key_Up:
-            self.rot_x -= 5
+            angle = -5
+            rot = np.eye(4, dtype=np.float32)
+            rad = np.radians(angle)
+            rot[1, 1] = np.cos(rad)
+            rot[1, 2] = -np.sin(rad)
+            rot[2, 1] = np.sin(rad)
+            rot[2, 2] = np.cos(rad)
+            self.rotation_matrix = rot @ self.rotation_matrix
         elif event.key() == Qt.Key.Key_Down:
-            self.rot_x += 5
+            angle = 5
+            rot = np.eye(4, dtype=np.float32)
+            rad = np.radians(angle)
+            rot[1, 1] = np.cos(rad)
+            rot[1, 2] = -np.sin(rad)
+            rot[2, 1] = np.sin(rad)
+            rot[2, 2] = np.cos(rad)
+            self.rotation_matrix = rot @ self.rotation_matrix
         elif event.key() in (Qt.Key.Key_Plus, Qt.Key.Key_Equal, Qt.Key.Key_PageUp):
             self.zoom += 2.0
             self.zoom = min(-5.0, self.zoom)
@@ -252,8 +277,24 @@ class GLWidget(QOpenGLWidget):
         dx = pos.x() - self.last_mouse_pos.x()
         dy = pos.y() - self.last_mouse_pos.y()
 
-        self.rot_x += dy * 0.5
-        self.rot_y += dx * 0.5
+        if abs(dx) > 0.01 or abs(dy) > 0.01:
+            angle_y = dx * 0.5
+            rot_y = np.eye(4, dtype=np.float32)
+            rad_y = np.radians(angle_y)
+            rot_y[0, 0] = np.cos(rad_y)
+            rot_y[0, 2] = np.sin(rad_y)
+            rot_y[2, 0] = -np.sin(rad_y)
+            rot_y[2, 2] = np.cos(rad_y)
+
+            angle_x = dy * 0.5
+            rot_x = np.eye(4, dtype=np.float32)
+            rad_x = np.radians(angle_x)
+            rot_x[1, 1] = np.cos(rad_x)
+            rot_x[1, 2] = -np.sin(rad_x)
+            rot_x[2, 1] = np.sin(rad_x)
+            rot_x[2, 2] = np.cos(rad_x)
+
+            self.rotation_matrix = rot_y @ self.rotation_matrix @ rot_x
 
         self.last_mouse_pos = pos
         self.update()
@@ -269,7 +310,24 @@ class GLWidget(QOpenGLWidget):
 
     def set_camera_preset(self, preset_name: str):
         if preset_name in self.camera_presets:
-            self.rot_x, self.rot_y = self.camera_presets[preset_name]
+            rot_x, rot_y = self.camera_presets[preset_name]
+            self.rotation_matrix = np.eye(4, dtype=np.float32)
+
+            rad_y = np.radians(rot_y)
+            rot_y_mat = np.eye(4, dtype=np.float32)
+            rot_y_mat[0, 0] = np.cos(rad_y)
+            rot_y_mat[0, 2] = np.sin(rad_y)
+            rot_y_mat[2, 0] = -np.sin(rad_y)
+            rot_y_mat[2, 2] = np.cos(rad_y)
+
+            rad_x = np.radians(rot_x)
+            rot_x_mat = np.eye(4, dtype=np.float32)
+            rot_x_mat[1, 1] = np.cos(rad_x)
+            rot_x_mat[1, 2] = -np.sin(rad_x)
+            rot_x_mat[2, 1] = np.sin(rad_x)
+            rot_x_mat[2, 2] = np.cos(rad_x)
+
+            self.rotation_matrix = rot_y_mat @ rot_x_mat
             self.update()
 
     def reset_camera(self):
@@ -317,13 +375,10 @@ class GLWidget(QOpenGLWidget):
         bone_transforms = []
 
         for i, pivot in enumerate(hierarchy.pivots):
-            # Create translation matrix
             trans = np.eye(4)
             trans[0:3, 3] = [pivot.translation.x, pivot.translation.y, pivot.translation.z]
 
-            # Create rotation matrix from quaternion
             q = pivot.rotation
-            # Quaternion to rotation matrix
             rot = np.eye(4)
             rot[0, 0] = 1 - 2 * q.y * q.y - 2 * q.z * q.z
             rot[0, 1] = 2 * q.x * q.y - 2 * q.z * q.w
@@ -335,14 +390,11 @@ class GLWidget(QOpenGLWidget):
             rot[2, 1] = 2 * q.y * q.z + 2 * q.x * q.w
             rot[2, 2] = 1 - 2 * q.x * q.x - 2 * q.y * q.y
 
-            # Local transform = translation * rotation
             local_transform = trans @ rot
 
-            # Apply fixup matrix if present
             if pivot.fixup_matrix is not None:
                 local_transform = local_transform @ pivot.fixup_matrix
 
-            # Compute world transform by multiplying with parent's world transform
             if pivot.parent_id >= 0 and pivot.parent_id < len(bone_transforms):
                 world_transform = bone_transforms[pivot.parent_id] @ local_transform
             else:
@@ -357,19 +409,15 @@ class GLWidget(QOpenGLWidget):
         if not self.bone_transforms:
             return vertex
 
-        # Convert vertex to homogeneous coordinates
         v = np.array([vertex.x, vertex.y, vertex.z, 1.0])
         result = np.zeros(4)
 
-        # Apply primary bone influence
         if bone_idx1 < len(self.bone_transforms):
             result += (self.bone_transforms[bone_idx1] @ v) * weight1
 
-        # Apply secondary bone influence if present
         if weight2 > 0 and bone_idx2 < len(self.bone_transforms):
             result += (self.bone_transforms[bone_idx2] @ v) * weight2
 
-        # Return as Vector-like object
         class TransformedVertex:
             def __init__(self, x, y, z):
                 self.x = x
