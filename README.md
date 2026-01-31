@@ -7,7 +7,7 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
     * Video files
     * CAH files including editing
     * Maps and Base files including editing!
-    * W3D models
+    * W3D models with their skeletons and textures
 * Smoother navigation
 * Open source
 * Syntax Highlighting
