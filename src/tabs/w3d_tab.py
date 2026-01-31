@@ -149,7 +149,7 @@ class GLWidget(QOpenGLWidget):
 
         self.lighting_preset = "Default"
         self.subobject_visibility = {}
-        self.bone_transforms = []  # Computed bone matrices for skinning
+        self.bone_transforms = []
 
         self.camera_presets = {
             "front": (0, 0),
@@ -208,14 +208,12 @@ class GLWidget(QOpenGLWidget):
             else:
                 glDisable(GL_TEXTURE_2D)
 
-            # Cache material pass to avoid repeated list access
             material_pass = mesh.material_passes[0]
             if material_pass.tx_coords:
                 tx_coords = material_pass.tx_coords
             else:
                 tx_coords = material_pass.tx_stages[0].tx_coords[0]
 
-            # Determine which vertices to use
             use_skinning = self.bone_transforms and mesh.vert_infs
             base_vertices = mesh.verts
             normals = mesh.normals if mesh.normals else None
@@ -225,7 +223,6 @@ class GLWidget(QOpenGLWidget):
                 for idx in tri.vert_ids:
                     uv = tx_coords[idx]
 
-                    # Apply skinning if skeleton is loaded
                     if use_skinning and idx < len(mesh.vert_infs):
                         influence = mesh.vert_infs[idx]
                         v = self.transform_vertex(
@@ -236,10 +233,8 @@ class GLWidget(QOpenGLWidget):
                             influence.xtra_inf,
                         )
                     else:
-                        # Use bind pose or regular vertices
                         v = mesh.verts_2[idx] if mesh.verts_2 else base_vertices[idx]
 
-                    # Use per-vertex normals if available, otherwise use triangle normal
                     n = normals[idx] if normals and idx < len(normals) else tri.normal
                     glTexCoord2f(uv.x, uv.y)
                     glNormal3f(n.x, n.y, n.z)
@@ -251,7 +246,6 @@ class GLWidget(QOpenGLWidget):
         if not self.data_context.meshes:
             return
 
-        # Collect all vertices into a numpy array for efficient min/max computation
         all_verts = []
         for mesh in self.data_context.meshes:
             for v in mesh.verts:
@@ -591,6 +585,7 @@ class W3DTab(GenericTab):
         top_row.addWidget(self.info_box)
 
         self._auto_load_skeleton()
+        self._auto_load_textures()
 
         layout.addLayout(top_row)
 
@@ -829,10 +824,29 @@ class W3DTab(GenericTab):
                 if self._apply_skeleton_data(w3d_data):
                     break
         except (OSError, IOError) as e:
-            # Silently fail for file I/O errors during auto-load
             pass
         except Exception:
-            # Log unexpected errors but don't crash
+            pass
+
+    def _auto_load_textures(self):
+        """Automatically load textures from the same archive if they exist."""
+        if not self.archive:
+            return
+
+        try:
+            archive_texture_map = self._find_files_in_archive(self.archive, (".dds", ".tga"))
+
+            for subobj_name in self.gl_widget.textures.keys():
+                texture_info = self.gl_widget.get_texture_info(subobj_name)
+                texture_base_name = self._get_base_filename(texture_info["file_name"])
+
+                if texture_base_name in archive_texture_map:
+                    image_data = self.archive.read_file(archive_texture_map[texture_base_name])
+                    self.gl_widget.set_texture_for_subobject(subobj_name, image_data)
+                    self._set_button_loaded(subobj_name)
+        except (OSError, IOError) as e:
+            pass
+        except Exception:
             pass
 
     def _zoom(self, delta):
