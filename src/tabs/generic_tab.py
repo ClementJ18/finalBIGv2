@@ -157,3 +157,9 @@ class GenericTab(QWidget):
     def delete(self):
         index = self.main.tabs.indexOf(self)
         self.main.tabs.remove_tab(index)
+
+    def to_dict(self) -> dict:
+        return {}
+
+    def from_dict(self, data: dict):
+        pass

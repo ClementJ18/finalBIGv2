@@ -49,6 +49,7 @@ class FileView:
 class FileTab:
     file: str
     is_preview: bool
+    data: dict = field(default_factory=dict)
 
 
 @dataclass

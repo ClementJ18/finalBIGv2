@@ -4,7 +4,7 @@ import tempfile
 import traceback
 import webbrowser
 from datetime import datetime
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import moddb
 import qdarktheme
@@ -45,6 +45,9 @@ from utils.utils import (
     resource_path,
 )
 from workspaces import WorkspaceDialog
+
+if TYPE_CHECKING:
+    from tabs.generic_tab import GenericTab
 
 __version__ = "0.14.0"
 
@@ -297,7 +300,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         for i in range(self.tabs.count()):
             tab = self.tabs.widget(i)
-            new_workspace.tabs.append(FileTab(file=tab.name, is_preview=tab.preview))
+            new_workspace.tabs.append(
+                FileTab(file=tab.name, is_preview=tab.preview, data=tab.to_dict())
+            )
 
         self.settings.save_workspace(workspace_name, new_workspace)
         add_to_windows_recent(self.settings.get_workspace_path(workspace_name))
@@ -332,8 +337,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.search.addItems(workspace.search)
 
         def update_tab():
-            for tab in workspace.tabs:
-                self._create_tab(tab.file, preview=tab.is_preview)
+            for tab_data in workspace.tabs:
+                tab = self._create_tab(tab_data.file, preview=tab_data.is_preview)
+                tab.from_dict(tab_data.data)
 
         QTimer.singleShot(0, update_tab)
 
@@ -1016,13 +1022,13 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         return -1
 
-    def _create_tab(self, name: str, preview: bool = False):
+    def _create_tab(self, name: str, preview: bool = False) -> "GenericTab":
         first_tab = self.tabs.widget(0)
 
         if preview:
             if first_tab and first_tab.name == name:
                 self.tabs.setCurrentIndex(0)
-                return
+                return first_tab
 
             tab = get_tab_from_file_type(name)(self, self.archive, name, preview)
             tab.generate_preview()
@@ -1032,27 +1038,29 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.tabs.insertTab(0, tab, preview_name(name))
             self.tabs.setTabToolTip(0, preview_name(name))
             self.tabs.setCurrentIndex(0)
-            return
+            return tab
+
+        for i in range(self.tabs.count()):
+            existing_tab = self.tabs.widget(i)
+            if existing_tab.name == name and not existing_tab.preview:
+                self.tabs.setCurrentIndex(i)
+                return existing_tab
+
+        if first_tab and first_tab.preview and first_tab.name == name:
+            self.remove_file_tab(0)
+
+        tab = get_tab_from_file_type(name)(self, self.archive, name, preview)
+        if self.settings.external:
+            tab.open_externally()
         else:
-            for i in range(self.tabs.count()):
-                existing_tab = self.tabs.widget(i)
-                if existing_tab.name == name and not existing_tab.preview:
-                    self.tabs.setCurrentIndex(i)
-                    return
+            tab.generate_layout()
 
-            if first_tab and first_tab.preview and first_tab.name == name:
-                self.remove_file_tab(0)
+        self.tabs.addTab(tab, name)
+        index = self.tabs.count() - 1
+        self.tabs.setTabToolTip(index, name)
+        self.tabs.setCurrentIndex(index)
 
-            tab = get_tab_from_file_type(name)(self, self.archive, name, preview)
-            if self.settings.external:
-                tab.open_externally()
-            else:
-                tab.generate_layout()
-
-            self.tabs.addTab(tab, name)
-            index = self.tabs.count() - 1
-            self.tabs.setTabToolTip(index, name)
-            self.tabs.setCurrentIndex(index)
+        return tab
 
     def file_double_clicked(self, _):
         if not self.listwidget.active_list.is_valid_selection():

@@ -1,3 +1,4 @@
+import base64
 import io
 import math
 
@@ -84,7 +85,11 @@ class GLWidget(QOpenGLWidget):
         self.bbox_center = (0.0, 0.0, 0.0)
         self.last_mouse_pos = None
         self.textures = {
-            subobject["name"]: {"texture": None, "file_name": subobject["texture"]}
+            subobject["name"]: {
+                "texture": None,
+                "file_name": subobject["texture"],
+                "image_data": None,  # Stores the raw image bytes for persistence
+            }
             for subobject in subobject_data
         }
 
@@ -415,8 +420,7 @@ class W3DTab(GenericTab):
         self.context = DataContext()
         load_file(self.context, self.data)
         self.subobject_data = self._get_subobject_data()
-
-        # breakpoint()
+        self.skeleton_data = None
 
         top_row = QHBoxLayout()
 
@@ -426,7 +430,6 @@ class W3DTab(GenericTab):
         self.info_box = self._create_info_box()
         top_row.addWidget(self.info_box)
 
-        # Auto-load skeleton from the same archive if available
         self._auto_load_skeleton()
 
         layout.addLayout(top_row)
@@ -582,6 +585,7 @@ class W3DTab(GenericTab):
                         )
                         texture_id = self.gl_widget.load_texture(image_data)
                         self.gl_widget.textures[subobj_name]["texture"] = texture_id
+                        self.gl_widget.textures[subobj_name]["image_data"] = image_data
                         loaded_count += 1
 
                         if subobj_name in self.texture_buttons:
@@ -604,6 +608,7 @@ class W3DTab(GenericTab):
                     image_data = f.read()
                     texture_id = self.gl_widget.load_texture(image_data)
                     self.gl_widget.textures[subobject_name]["texture"] = texture_id
+                    self.gl_widget.textures[subobject_name]["image_data"] = image_data
 
                     if subobject_name in self.texture_buttons:
                         self.texture_buttons[subobject_name].setStyleSheet(
@@ -626,25 +631,23 @@ class W3DTab(GenericTab):
             is_archive = file_path.lower().endswith(".big")
 
             if is_archive:
-                # Load from BIG archive
                 hierarchy_archive = pyBIG.InDiskArchive(file_path)
                 hierarchy_name = (
                     self.context.hlod.header.hierarchy_name if self.context.hlod else None
                 )
 
                 if hierarchy_name:
-                    # Search for hierarchy file in archive
                     for file in hierarchy_archive.file_list():
                         if file.lower().endswith(".w3d"):
                             file_name = file.split("\\")[-1]
                             if hierarchy_name.lower() in file_name.lower():
-                                # Load hierarchy from archive
                                 w3d_data = hierarchy_archive.read_file(file)
                                 temp_context = DataContext()
                                 load_file(temp_context, w3d_data)
 
                                 if temp_context.hierarchy:
                                     self.context.hierarchy = temp_context.hierarchy
+                                    self.skeleton_data = w3d_data
                                     self.gl_widget.bone_transforms = (
                                         self.gl_widget.compute_bone_transforms(
                                             temp_context.hierarchy
@@ -664,7 +667,6 @@ class W3DTab(GenericTab):
                         self, "No Hierarchy Name", "Model does not specify a hierarchy name."
                     )
             else:
-                # Load from W3D file
                 with open(file_path, "rb") as f:
                     w3d_data = f.read()
                     temp_context = DataContext()
@@ -672,6 +674,7 @@ class W3DTab(GenericTab):
 
                     if temp_context.hierarchy:
                         self.context.hierarchy = temp_context.hierarchy
+                        self.skeleton_data = w3d_data
                         self.gl_widget.bone_transforms = self.gl_widget.compute_bone_transforms(
                             temp_context.hierarchy
                         )
@@ -683,7 +686,6 @@ class W3DTab(GenericTab):
                             "Selected file does not contain a hierarchy.",
                         )
 
-            # Update button color to green if hierarchy was loaded
             if hierarchy_loaded:
                 self.skeleton_button.setStyleSheet("background-color: green; color: white;")
                 QMessageBox.information(
@@ -696,36 +698,32 @@ class W3DTab(GenericTab):
 
     def _auto_load_skeleton(self):
         """Automatically load skeleton from the same archive if it exists."""
-        # Check if we have a hierarchy name to search for
         hierarchy_name = self.context.hlod.header.hierarchy_name if self.context.hlod else None
 
         if not hierarchy_name or not self.archive:
             return
 
-        # Try to find and load the hierarchy from the archive
         try:
             for file in self.archive.file_list():
                 if file.lower().endswith(".w3d"):
                     file_name = file.split("\\")[-1]
                     if hierarchy_name.lower() in file_name.lower():
-                        # Load hierarchy from archive
                         w3d_data = self.archive.read_file(file)
                         temp_context = DataContext()
                         load_file(temp_context, w3d_data)
 
                         if temp_context.hierarchy:
                             self.context.hierarchy = temp_context.hierarchy
+                            self.skeleton_data = w3d_data
                             self.gl_widget.bone_transforms = (
                                 self.gl_widget.compute_bone_transforms(temp_context.hierarchy)
                             )
-                            # Update button color to green
                             if hasattr(self, "skeleton_button"):
                                 self.skeleton_button.setStyleSheet(
                                     "background-color: green; color: white;"
                                 )
                             break
         except Exception as e:
-            # Silently fail if auto-load doesn't work
             pass
 
     def _zoom_in(self):
@@ -745,3 +743,62 @@ class W3DTab(GenericTab):
     def _reset_light(self):
         self.light_combo.setCurrentIndex(0)
         self.gl_widget.set_lighting("Default")
+
+    def to_dict(self) -> dict:
+        textures_data = {}
+        for subobj_name, texture_info in self.gl_widget.textures.items():
+            if texture_info["texture"] is not None and texture_info["image_data"] is not None:
+                textures_data[subobj_name] = {
+                    "image_data": base64.b64encode(texture_info["image_data"]).decode("utf-8")
+                }
+
+        result = {"textures": textures_data}
+
+        if self.skeleton_data is not None:
+            result["skeleton"] = base64.b64encode(self.skeleton_data).decode("utf-8")
+
+        return result
+
+    def from_dict(self, data: dict):
+        if "textures" in data:
+            textures_data = data["textures"]
+            for subobj_name, texture_info in textures_data.items():
+                encoded_image = texture_info.get("image_data")
+
+                if not encoded_image or subobj_name not in self.gl_widget.textures:
+                    continue
+
+                try:
+                    image_data = base64.b64decode(encoded_image)
+                    texture_id = self.gl_widget.load_texture(image_data)
+                    self.gl_widget.textures[subobj_name]["texture"] = texture_id
+                    self.gl_widget.textures[subobj_name]["image_data"] = image_data
+
+                    if subobj_name in self.texture_buttons:
+                        self.texture_buttons[subobj_name].setStyleSheet(
+                            "background-color: green; color: white;"
+                        )
+                except Exception:
+                    pass
+
+        if "skeleton" in data:
+            try:
+                skeleton_data = base64.b64decode(data["skeleton"])
+                temp_context = DataContext()
+                load_file(temp_context, skeleton_data)
+
+                if temp_context.hierarchy:
+                    self.context.hierarchy = temp_context.hierarchy
+                    self.skeleton_data = skeleton_data
+                    self.gl_widget.bone_transforms = self.gl_widget.compute_bone_transforms(
+                        temp_context.hierarchy
+                    )
+
+                    if hasattr(self, "skeleton_button"):
+                        self.skeleton_button.setStyleSheet(
+                            "background-color: green; color: white;"
+                        )
+            except Exception:
+                pass
+
+        self.gl_widget.update()

@@ -464,3 +464,25 @@ class TextTab(GenericTab):
         self.archive.edit_file(self.name, string)
 
         super().save()
+
+    def to_dict(self) -> dict:
+        return {
+            "scroll_position": scroll.get(self.name, (0, 0)),
+            "search_parameters": self.search_parameters,
+            "search_history": [
+                self.search_box.itemText(x) for x in range(self.search_box.count())
+            ],
+        }
+
+    def from_dict(self, data: dict):
+        if "scroll_position" in data:
+            scroll[self.name] = data["scroll_position"]
+            self.restore_scroll_position()
+
+        if "search_parameters" in data:
+            self.search_parameters = data["search_parameters"]
+
+        if "search_history" in data:
+            self.search_box.clear()
+            for item in data["search_history"]:
+                self.search_box.addItem(item)
