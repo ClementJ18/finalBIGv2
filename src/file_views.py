@@ -1,6 +1,9 @@
+import os
+import tempfile
 from typing import TYPE_CHECKING, List
 
-from PyQt6.QtCore import QEvent, QObject, Qt
+from PyQt6.QtCore import QEvent, QMimeData, QObject, Qt, QUrl
+from PyQt6.QtGui import QDrag
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QListWidget,
@@ -15,13 +18,11 @@ if TYPE_CHECKING:
     from main import MainWindow
 
 
-class FileViewAbstract:
+class BaseFileView:
     filter: tuple | None
     is_favorite: bool
     view_type: str
-
-    def context_menu(self, pos):
-        raise NotImplementedError
+    main: "MainWindow"
 
     def update_list(self):
         raise NotImplementedError
@@ -53,29 +54,8 @@ class FileViewAbstract:
     def get_item_path(self, item: QObject) -> str | None:
         raise NotImplementedError
 
-
-class ListFileView(QListWidget, FileViewAbstract):
-    view_type = "list"
-
-    def __init__(self, parent, is_favorite: bool = False):
-        super().__init__(parent)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.customContextMenuRequested.connect(self.context_menu)
-
-        self.main: "MainWindow" = parent
-        self.is_favorite = is_favorite
-
-        self.itemClicked.connect(self.main.file_single_clicked)
-        self.doubleClicked.connect(self.main.file_double_clicked)
-        self.setSortingEnabled(True)
-
-        self.files_list: list[str] = []
-        self.filter = None
-
-        self.installEventFilter(self)
-
     def eventFilter(self, source: QObject, event: QEvent):
+        """Common event filter for handling up/down arrow key navigation"""
         if source is self and event.type() == QEvent.Type.KeyRelease:
             if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down):
                 current = self.currentItem()
@@ -84,6 +64,10 @@ class ListFileView(QListWidget, FileViewAbstract):
         return super().eventFilter(source, event)
 
     def context_menu(self, pos):
+        """Common context menu implementation"""
+        if not self._should_show_context_menu():
+            return
+
         global_position = self.mapToGlobal(pos)
 
         menu = QMenu(self)
@@ -98,6 +82,87 @@ class ListFileView(QListWidget, FileViewAbstract):
             menu.addAction("Add to favorites", self.main.add_favorites)
 
         menu.exec(global_position)
+
+    def _should_show_context_menu(self) -> bool:
+        """Hook for subclasses to add validation before showing context menu"""
+        return True
+
+    def startDrag(self, supportedActions):
+        """Handle drag start event and extract files to temp directory for drag-and-drop"""
+        if not self.main.archive:
+            return
+
+        selected_files = self.get_selected_files()
+        if not selected_files:
+            return
+
+        temp_dir = tempfile.mkdtemp(prefix="finalbig_drag_")
+        temp_files = []
+
+        try:
+            for file_path in selected_files:
+                file_name = os.path.basename(file_path)
+                temp_file_path = os.path.join(temp_dir, file_name)
+
+                file_data = self.main.archive.read_file(file_path)
+                with open(temp_file_path, "wb") as f:
+                    f.write(file_data)
+
+                temp_files.append(temp_file_path)
+
+            mime_data = QMimeData()
+            urls = [QUrl.fromLocalFile(path) for path in temp_files]
+            mime_data.setUrls(urls)
+
+            original_mapping = "\n".join(
+                [
+                    f"{orig}|{os.path.normpath(temp)}"
+                    for orig, temp in zip(selected_files, temp_files)
+                ]
+            )
+            mime_data.setData("application/x-finalbig-files", original_mapping.encode("utf-8"))
+
+            drag = QDrag(self)
+            drag.setMimeData(mime_data)
+            drag.exec(Qt.DropAction.CopyAction)
+
+        except Exception as e:
+            print(f"Error during drag operation: {e}")
+            for temp_file in temp_files:
+                try:
+                    if os.path.exists(temp_file):
+                        os.remove(temp_file)
+                except Exception:
+                    pass
+            try:
+                if os.path.exists(temp_dir):
+                    os.rmdir(temp_dir)
+            except Exception:
+                pass
+
+
+class ListFileView(QListWidget, BaseFileView):
+    view_type = "list"
+
+    def __init__(self, parent, is_favorite: bool = False):
+        super().__init__(parent)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.context_menu)
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+
+        self.main: "MainWindow" = parent
+        self.is_favorite = is_favorite
+
+        self.itemClicked.connect(self.main.file_single_clicked)
+        self.doubleClicked.connect(self.main.file_double_clicked)
+        self.setSortingEnabled(True)
+
+        self.files_list: list[str] = []
+        self.filter = None
+
+        self.installEventFilter(self)
 
     def update_list(self):
         self.clear()
@@ -158,7 +223,7 @@ class ListFileView(QListWidget, FileViewAbstract):
         return item.text()
 
 
-class TreeFileView(QTreeWidget, FileViewAbstract):
+class TreeFileView(QTreeWidget, BaseFileView):
     view_type = "tree"
 
     def __init__(self, parent, is_favorite: bool = False):
@@ -167,6 +232,8 @@ class TreeFileView(QTreeWidget, FileViewAbstract):
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.context_menu)
+        self.setDragEnabled(True)
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
 
         self.main: "MainWindow" = parent
         self.is_favorite = is_favorite
@@ -180,32 +247,9 @@ class TreeFileView(QTreeWidget, FileViewAbstract):
 
         self.installEventFilter(self)
 
-    def eventFilter(self, source: QObject, event: QEvent):
-        if source is self and event.type() == QEvent.Type.KeyRelease:
-            if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down):
-                current = self.currentItem()
-                if current:
-                    self.main.file_single_clicked()
-        return super().eventFilter(source, event)
-
-    def context_menu(self, pos):
-        if not self.is_file_selected():
-            return
-
-        global_position = self.mapToGlobal(pos)
-
-        menu = QMenu(self)
-        menu.addAction("Delete selection", self.main.delete)
-        menu.addAction("Extract selection", self.main.extract)
-        menu.addAction("Rename file", self.main.rename)
-        menu.addAction("Copy file name", self.main.copy_name)
-        menu.addAction("Open Externally", self.main.open_externally)
-        if self.is_favorite:
-            menu.addAction("Remove from favorites", self.main.remove_favorites)
-        else:
-            menu.addAction("Add to favorites", self.main.add_favorites)
-
-        menu.exec(global_position)
+    def _should_show_context_menu(self) -> bool:
+        """TreeView only shows context menu when a file is selected"""
+        return self.is_file_selected()
 
     def update_list(self):
         self.clear()
@@ -391,22 +435,22 @@ file_view_mapping = {
 }
 
 
-def get_file_view_class(view_type: str) -> type[FileViewAbstract]:
+def get_file_view_class(view_type: str) -> type[BaseFileView]:
     return file_view_mapping.get(view_type, ListFileView)
 
 
 class FileViewTabs(QTabWidget):
     def __init__(self, parent: "MainWindow"):
         super().__init__(parent)
-        self.favorite_list: FileViewAbstract = None
+        self.favorite_list: BaseFileView = None
         self.main = parent
 
     @property
-    def active_list(self) -> FileViewAbstract:
+    def active_list(self) -> BaseFileView:
         return self.currentWidget()
 
     @property
-    def all_lists(self) -> List[FileViewAbstract]:
+    def all_lists(self) -> List[BaseFileView]:
         return [
             self.widget(i)
             for i in range(self.count() - 1)
@@ -414,7 +458,7 @@ class FileViewTabs(QTabWidget):
         ]
 
     @property
-    def all_but_favorite(self) -> List[FileViewAbstract]:
+    def all_but_favorite(self) -> List[BaseFileView]:
         lists = []
         for i in range(self.count() - 1):
             widget = self.widget(i)
@@ -449,13 +493,13 @@ class FileViewTabs(QTabWidget):
     def remove_favorites(self, files: List[str]):
         self.remove_files_from_tab(self.favorite_list, files)
 
-    def add_files_to_tab(self, widget: FileViewAbstract, files: List[str]):
+    def add_files_to_tab(self, widget: BaseFileView, files: List[str]):
         widget.add_files(files)
 
-    def remove_files_from_tab(self, widget: FileViewAbstract, files: List[str]):
+    def remove_files_from_tab(self, widget: BaseFileView, files: List[str]):
         widget.remove_files(files)
 
-    def widget(self, index) -> FileViewAbstract:
+    def widget(self, index) -> BaseFileView:
         return super().widget(index)
 
     def remove_tab(self, index):

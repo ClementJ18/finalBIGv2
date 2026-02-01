@@ -548,6 +548,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.path = None
         self.update_archive_name()
+        self.add_file_list()
         self.listwidget.update_list(True)
         self.lock_ui(False)
 
@@ -782,6 +783,27 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
                 files = filtered_files
                 complete_component = f"{component}\\{complete_component}"
+
+        if ask_name:
+            name, ok = WrappingInputDialog.getText(
+                self,
+                "Filename",
+                "Save the file under the following name:",
+                name,
+            )
+            if not ok or not name:
+                return False
+
+        ret = self.add_file_to_archive(url, name, blank, skip_all=not ask_name)
+        if ret != QMessageBox.StandardButton.No:
+            self.listwidget.add_files([name])
+            self.refresh_tabs([name])
+
+        return ret
+
+    def _add_file_with_name(self, url, suggested_name, *, blank=False, ask_name=True):
+        """Add a file to archive with a pre-suggested name (e.g., from drag-drop between archives)"""
+        name = suggested_name
 
         if ask_name:
             name, ok = WrappingInputDialog.getText(
@@ -1168,35 +1190,63 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
+            urls = event.mimeData().urls()
+            if any(url.toLocalFile().endswith(".big") for url in urls) or self.archive is not None:
+                event.acceptProposedAction()
+            else:
+                event.ignore()
         else:
             event.ignore()
 
     def dragMoveEvent(self, event: QDragMoveEvent):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
+            urls = event.mimeData().urls()
+            if any(url.toLocalFile().endswith(".big") for url in urls) or self.archive is not None:
+                event.acceptProposedAction()
+            else:
+                event.ignore()
         else:
             event.ignore()
 
     def dropEvent(self, event: QDropEvent):
         md = event.mimeData()
-        if md.hasUrls():
-            yes_to_all = False
-            for url in md.urls():
-                local_file = url.toLocalFile()
-                if local_file.endswith(".big"):
-                    self._open(local_file)
-                    break
+        if not md.hasUrls():
+            return
 
-                if os.path.isfile(local_file):
-                    ret = self._add_file(local_file, ask_name=not yes_to_all)
-                else:
-                    ret = self._add_folder(local_file)
+        original_paths = {}
+        if md.hasFormat("application/x-finalbig-files"):
+            mapping_data = md.data("application/x-finalbig-files").data().decode("utf-8")
+            for line in mapping_data.strip().split("\n"):
+                if "|" not in line:
+                    continue
+                original, temp = line.split("|", 1)
+                original_paths[os.path.normpath(temp)] = original
 
-                if ret == QMessageBox.StandardButton.YesToAll:
-                    yes_to_all = True
+        yes_to_all = False
+        for url in md.urls():
+            local_file = url.toLocalFile()
 
-            event.acceptProposedAction()
+            if local_file.endswith(".big"):
+                self._open(local_file)
+                break
+
+            if self.archive is None:
+                continue
+
+            if os.path.isfile(local_file):
+                suggested_name = original_paths.get(os.path.normpath(local_file))
+                ret = (
+                    self._add_file_with_name(local_file, suggested_name, ask_name=False)
+                    if suggested_name
+                    else self._add_file(local_file, ask_name=not yes_to_all)
+                )
+            else:
+                ret = self._add_folder(local_file)
+
+            if ret == QMessageBox.StandardButton.YesToAll:
+                yes_to_all = True
+
+        event.acceptProposedAction()
 
 
 if __name__ == "__main__":
