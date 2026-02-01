@@ -27,6 +27,7 @@ A PyQt GUI intended to supplant the outdated FinalBIG program in the manipulatin
 * Update notification
 * Workspace saving
 * Folder tree visualisation for files
+* Drag and drop files between archives
 * And many more in the future!
 
 If you have feedback or find any issues, feel free to open a ticket or find me on discord @officialnecro. I can usually be found on quite a few BFME/SAGE servers. You can find me most easily on [Edain's](https://discord.gg/5GhZezy).
