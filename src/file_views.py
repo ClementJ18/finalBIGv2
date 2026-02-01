@@ -54,14 +54,15 @@ class BaseFileView:
     def get_item_path(self, item: QObject) -> str | None:
         raise NotImplementedError
 
-    def eventFilter(self, source: QObject, event: QEvent):
-        """Common event filter for handling up/down arrow key navigation"""
+    def _handle_navigation_keys(self, source: QObject, event: QEvent) -> bool:
+        """Common logic for handling up/down arrow key navigation"""
         if source is self and event.type() == QEvent.Type.KeyRelease:
             if event.key() in (Qt.Key.Key_Up, Qt.Key.Key_Down):
                 current = self.currentItem()
                 if current:
                     self.main.file_single_clicked()
-        return super().eventFilter(source, event)
+                    return True
+        return False
 
     def context_menu(self, pos):
         """Common context menu implementation"""
@@ -164,6 +165,12 @@ class ListFileView(QListWidget, BaseFileView):
 
         self.installEventFilter(self)
 
+    def eventFilter(self, source: QObject, event: QEvent):
+        """Handle arrow key navigation for preview"""
+        if self._handle_navigation_keys(source, event):
+            return True
+        return super().eventFilter(source, event)
+
     def update_list(self):
         self.clear()
         if self.main.archive is None:
@@ -246,6 +253,12 @@ class TreeFileView(QTreeWidget, BaseFileView):
         self.filter = None
 
         self.installEventFilter(self)
+
+    def eventFilter(self, source: QObject, event: QEvent):
+        """Handle arrow key navigation for preview"""
+        if self._handle_navigation_keys(source, event):
+            return True
+        return super().eventFilter(source, event)
 
     def _should_show_context_menu(self) -> bool:
         """TreeView only shows context menu when a file is selected"""

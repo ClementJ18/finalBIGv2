@@ -19,6 +19,7 @@ from PyQt6.QtGui import (
     QDropEvent,
     QIcon,
 )
+from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -49,7 +50,7 @@ from workspaces import WorkspaceDialog
 if TYPE_CHECKING:
     from tabs.generic_tab import GenericTab
 
-__version__ = "0.14.0"
+__version__ = "0.14.1"
 
 basedir = os.path.dirname(__file__)
 
@@ -98,6 +99,13 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             qdarktheme.setup_theme("light", corner_shape="sharp")
 
         generate_ui(self)
+
+        # Pre-initialize OpenGL context to prevent window flickering on first W3D tab
+        self._gl_preload = QOpenGLWidget(self)
+        self._gl_preload.setFixedSize(1, 1)
+        self._gl_preload.makeCurrent()
+        self._gl_preload.hide()
+
         self.update_archive_name("No Archive Open")
         self.lock_ui(True)
         self.update_recent_files_menu()
