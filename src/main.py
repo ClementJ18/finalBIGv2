@@ -50,7 +50,7 @@ from workspaces import WorkspaceDialog
 if TYPE_CHECKING:
     from tabs.generic_tab import GenericTab
 
-__version__ = "0.14.1"
+__version__ = "0.14.2"
 
 basedir = os.path.dirname(__file__)
 
@@ -64,13 +64,18 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         "Uncaught Exception",
         f"Oops. An unexpected error occured. Please copy and submit to <a href='https://github.com/ClementJ18/finalBIGv2/issues'>here</a> if possible.\n<pre>{tb}</pre>",
     )
-    errorbox.addButton(QPushButton("Copy to clipboard"), QMessageBox.ButtonRole.ActionRole)
-    errorbox.addButton(QPushButton("Ok"), QMessageBox.ButtonRole.AcceptRole)
-    errorbox.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-    ret = errorbox.exec()
+    copy_button = QPushButton("Copy to clipboard")
+    errorbox.addButton(copy_button, QMessageBox.ButtonRole.ActionRole)
+    ok_button = QPushButton("Ok")
+    errorbox.addButton(ok_button, QMessageBox.ButtonRole.AcceptRole)
+    errorbox.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
 
-    if ret == 0:
-        QApplication.instance().clipboard().setText(tb)
+    while True:
+        errorbox.exec()
+        if errorbox.clickedButton() == copy_button:
+            QApplication.clipboard().setText(tb)
+        else:
+            break
 
 
 sys.excepthook = handle_exception
@@ -1258,6 +1263,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
 
 if __name__ == "__main__":
+    if getattr(sys, "frozen", False):
+        os.chdir(tempfile.gettempdir())
+
     app = QApplication(sys.argv)
     w = MainWindow()
 
