@@ -33,6 +33,8 @@ class HasUiElements:
     shortcuts: list
     recent_menu: QMenu
     workspace_menu: QMenu
+    undo_action: QAction
+    redo_action: QAction
     dark_mode_action: QAction
     use_external_action: QAction
     large_archive_action: QAction
@@ -149,6 +151,16 @@ def create_menu(main: "MainWindow"):
     main.update_recent_workspace_menu()
 
     edit_menu = menu.addMenu("&Edit")
+    main.undo_action = edit_menu.addAction("&Undo", main.undo_archive)
+    main.undo_action.setShortcut(QKeySequence("CTRL+Z"))
+    main.undo_action.setEnabled(False)
+
+    main.redo_action = edit_menu.addAction("Re&do", main.redo_archive)
+    main.redo_action.setShortcut(QKeySequence("CTRL+Y"))
+    main.redo_action.setEnabled(False)
+
+    edit_menu.addSeparator()
+
     new_file_action = edit_menu.addAction("&New File", main.new_file)
     new_file_action.setShortcut(QKeySequence("CTRL+SHIFT+N"))
 
@@ -270,6 +282,9 @@ def create_menu(main: "MainWindow"):
         main.lock_exceptions.append(view_action)
 
     main.lock_exceptions.append(option_menu.addAction("&Set encoding", main.settings.set_encoding))
+    main.lock_exceptions.append(
+        option_menu.addAction("Set &Undo Stack Size", main.settings.set_undo_stack_size)
+    )
 
 
 def generate_ui(main: "MainWindow"):

@@ -192,6 +192,14 @@ class Settings:
         self.set_str("settings/default_file_list_type", value)
 
     @property
+    def undo_stack_size(self) -> int:
+        return self.get_int("settings/undo_stack_size", 50)
+
+    @undo_stack_size.setter
+    def undo_stack_size(self, value: int) -> None:
+        self.set_int("settings/undo_stack_size", value)
+
+    @property
     def ignore_version_update(self) -> bool:
         return self.get_str("update/ignore_version_update", None)
 
@@ -222,6 +230,23 @@ class Settings:
         recent_files.insert(0, path)
         del recent_files[RECENT_FILES_MAX:]
         self.save_recent_files(recent_files)
+
+    def set_undo_stack_size(self):
+        value, ok = QInputDialog.getInt(
+            self.main,
+            "Undo Stack Size",
+            "Maximum number of undo steps (1–500):",
+            self.undo_stack_size,
+            1,
+            500,
+            1,
+        )
+        if not ok:
+            return
+
+        self.undo_stack_size = value
+        self.main.undo_stack.resize(value)
+        self.main.update_undo_redo_actions()
 
     def set_encoding(self):
         name, ok = QInputDialog.getItem(

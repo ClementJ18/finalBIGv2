@@ -1,14 +1,15 @@
 import os
+import platform
 import sys
 import tempfile
 import traceback
+import urllib.parse
 import webbrowser
 from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
 import moddb
 import qdarktheme
-from moddb.errors import ModdbException
 from pyBIG import InDiskArchive, InMemoryArchive, base_archive
 from PyQt6.QtCore import QEvent, Qt, QTimer
 from PyQt6.QtGui import (
@@ -37,6 +38,7 @@ from search import SearchManager
 from settings import FileTab, FileView, Settings, Workplace
 from tabs import get_tab_from_file_type
 from ui import HasUiElements, generate_ui
+from undo import AddFileCommand, DeleteFilesCommand, RenameFileCommand, UndoStack
 from utils.utils import (
     ABOUT_STRING,
     HELP_STRING,
@@ -50,7 +52,7 @@ from workspaces import WorkspaceDialog
 if TYPE_CHECKING:
     from tabs.generic_tab import GenericTab
 
-__version__ = "0.14.2"
+__version__ = "0.15.2"
 
 basedir = os.path.dirname(__file__)
 
@@ -59,6 +61,31 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     tb = "\n".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
     traceback.print_exception(exc_type, exc_value, exc_traceback)
 
+    title = f"[BUG] {exc_type.__name__}: {str(exc_value)[:80]}"
+    body = (
+        f"**Describe the bug**\n"
+        f"A clear and concise description of what the bug is.\n\n"
+        f"**To Reproduce**\n"
+        f"Steps to reproduce the behavior:\n"
+        f"1. Go to '...'\n"
+        f"2. Click on '....'\n"
+        f"3. Scroll down to '....'\n"
+        f"4. See error\n\n"
+        f"**Expected behavior**\n"
+        f"A clear and concise description of what you expected to happen.\n\n"
+        f"**Screenshots**\n"
+        f"If applicable, add screenshots to help explain your problem.\n\n"
+        f"**Additional context**\n"
+        f"- App Version: {__version__}\n"
+        f"- OS: {platform.system()} {platform.version()}\n"
+        f"- Python: {sys.version}\n\n"
+        f"**Traceback**\n"
+        f"```\n{tb}\n```"
+    )
+    issue_url = "https://github.com/ClementJ18/finalBIGv2/issues/new?" + urllib.parse.urlencode(
+        {"title": title, "body": body, "labels": "bug"}
+    )
+
     errorbox = QMessageBox(
         QMessageBox.Icon.Critical,
         "Uncaught Exception",
@@ -66,6 +93,8 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     )
     copy_button = QPushButton("Copy to clipboard")
     errorbox.addButton(copy_button, QMessageBox.ButtonRole.ActionRole)
+    report_button = QPushButton("Report Issue")
+    errorbox.addButton(report_button, QMessageBox.ButtonRole.ActionRole)
     ok_button = QPushButton("Ok")
     errorbox.addButton(ok_button, QMessageBox.ButtonRole.AcceptRole)
     errorbox.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
@@ -74,6 +103,8 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         errorbox.exec()
         if errorbox.clickedButton() == copy_button:
             QApplication.clipboard().setText(tb)
+        elif errorbox.clickedButton() == report_button:
+            webbrowser.open(issue_url)
         else:
             break
 
@@ -98,6 +129,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.autosave_timer.setInterval(5 * 60 * 1000)
 
         self.settings = Settings(self)
+        self.undo_stack = UndoStack(self.settings.undo_stack_size)
         if self.settings.dark_mode:
             qdarktheme.setup_theme("dark", corner_shape="sharp")
         else:
@@ -129,6 +161,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
     def post_init(self):
         self.check_for_updates()
+        handle = self.windowHandle()
+        if handle:
+            handle.screenChanged.connect(self._on_screen_changed)
+
+    def _on_screen_changed(self, *_):
+        self.setGeometry(self.geometry())
 
     def check_for_updates(self):
         if self.settings.update_last_checked is not None:
@@ -142,7 +180,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             r: moddb.File = moddb.parse_page(
                 "https://www.moddb.com/games/battle-for-middle-earth-ii/downloads/finalbigv2"
             )
-        except ModdbException:
+        except Exception:
             return
 
         latest_version = r.name.split("-")[-1].strip()
@@ -379,6 +417,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.workspace_name = None
         self.archive = None
         self.path = None
+        self.undo_stack.clear()
 
         for i in reversed(range(self.tabs.count())):
             self.remove_file_tab(i)
@@ -532,6 +571,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.tab_current_index = self.listwidget.currentIndex()
         self.listwidget.update_list(True)
         self.lock_ui(False)
+        self.update_undo_redo_actions()
 
         return True
 
@@ -564,6 +604,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.add_file_list()
         self.listwidget.update_list(True)
         self.lock_ui(False)
+        self.update_undo_redo_actions()
 
     def remove_file_tab(self, index):
         self.tabs.remove_tab(index)
@@ -673,9 +714,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             QMessageBox.Icon.Information,
             "Processing archives",
             f"Processing archive: <b>{path}</b><br>Getting ready to start processing archive. Found {length} files",
-            self,
+            parent=self,
         )
-        text_box.setStandardButtons(0)
+        text_box.setStandardButtons(QMessageBox.StandardButton.NoButton)
 
         text_box.show()
         QApplication.processEvents()
@@ -723,7 +764,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     self.archive.modified_entries = {}
                     break
 
-        text_box.close()
+        text_box.setText(
+            f"Finished processing archive: <b>{path}</b><br>Added {len(files_added)} files"
+        )
+        text_box.accept()
 
         return files_added
 
@@ -843,7 +887,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             for f in files:
                 full_path = os.path.join(root, f)
                 name = normalize_name(os.path.relpath(full_path, common_dir))
-                ret = self.add_file_to_archive(full_path, name, blank=False, skip_all=skip_all)
+                ret = self.add_file_to_archive(
+                    full_path, name, blank=False, skip_all=skip_all, undoable=False
+                )
 
                 if ret != QMessageBox.StandardButton.No:
                     files_to_add.append(name)
@@ -853,9 +899,11 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.listwidget.add_files(files_to_add)
 
-    def add_file_to_archive(self, url, name, blank=False, skip_all=False):
+    def add_file_to_archive(self, url, name, blank=False, skip_all=False, undoable=True):
+        replaced_data = None
         ret = None
         if self.archive.file_exists(name):
+            replaced_data = self.archive.read_file(name)
             if not skip_all:
                 ret = QMessageBox.question(
                     self,
@@ -881,6 +929,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             QMessageBox.warning(self, "Error", str(e))
             return ret
 
+        if undoable:
+            self.undo_stack.push(AddFileCommand(name, self.archive.read_file(name), replaced_data))
+            self.update_undo_redo_actions()
+
         return ret
 
     def is_file_selected(self):
@@ -897,7 +949,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if not self.is_file_selected():
             return
 
-        deleted = []
+        deleted_with_data = []
         skip_all = False
         for name in self.get_selected_files():
             if not skip_all:
@@ -916,11 +968,13 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 if ret == QMessageBox.StandardButton.YesToAll:
                     skip_all = True
 
-            deleted.append(name)
+            deleted_with_data.append((name, self.archive.read_file(name)))
             self.archive.remove_file(name)
 
-        if not deleted:
+        if not deleted_with_data:
             return
+
+        deleted = [name for name, _ in deleted_with_data]
 
         for i in reversed(range(self.tabs.count())):
             tab = self.tabs.widget(i)
@@ -928,6 +982,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 self.tabs.remove_tab(i)
 
         self.listwidget.remove_files(deleted)
+        self.undo_stack.push(DeleteFilesCommand(deleted_with_data))
+        self.update_undo_redo_actions()
         QMessageBox.information(self, "Done", "File selection has been deleted")
 
     def clear_preview(self):
@@ -970,6 +1026,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.listwidget.remove_files([original_name])
         self.listwidget.add_files([name])
+
+        self.undo_stack.push(RenameFileCommand(original_name, name))
+        self.update_undo_redo_actions()
 
         QMessageBox.information(self, "Done", "File renamed")
 
@@ -1122,6 +1181,18 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         else:
             self._create_tab(name, preview=True)
 
+    def undo_archive(self):
+        self.undo_stack.undo(self)
+        self.update_undo_redo_actions()
+
+    def redo_archive(self):
+        self.undo_stack.redo(self)
+        self.update_undo_redo_actions()
+
+    def update_undo_redo_actions(self):
+        self.undo_action.setEnabled(self.undo_stack.can_undo)
+        self.redo_action.setEnabled(self.undo_stack.can_redo)
+
     def refresh_tabs(self, files: list[str]):
         for i in range(self.tabs.count()):
             tab = self.tabs.widget(i)
@@ -1266,6 +1337,9 @@ if __name__ == "__main__":
     if getattr(sys, "frozen", False):
         os.chdir(tempfile.gettempdir())
 
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
     app = QApplication(sys.argv)
     w = MainWindow()
 
