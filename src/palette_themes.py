@@ -1,5 +1,6 @@
+import hashlib
 import os
-from urllib.parse import quote
+import tempfile
 
 from PyQt6.QtGui import QColor, QPalette
 
@@ -28,11 +29,19 @@ def _load_glyphs() -> dict:
 
 
 _GLYPHS = _load_glyphs()
+_CACHE_DIR = os.path.join(tempfile.gettempdir(), "finalbigv2_theme")
 
 
-def _data_uri(svg_text: str, color: str) -> str:
-    tinted = svg_text.replace("currentColor", color)
-    return "data:image/svg+xml;utf8," + quote(tinted, safe="")
+def _tinted_path(name: str, color: str) -> str:
+    """Write a tinted SVG to a temp cache and return a forward-slash file URL."""
+    os.makedirs(_CACHE_DIR, exist_ok=True)
+    digest = hashlib.md5(color.encode("ascii")).hexdigest()[:8]
+    out = os.path.join(_CACHE_DIR, f"{name}_{digest}.svg")
+    if not os.path.exists(out):
+        tinted = _GLYPHS[name].replace("currentColor", color)
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(tinted)
+    return out.replace("\\", "/")
 
 NORD = {
     "is_dark": True,
@@ -185,12 +194,12 @@ def build_stylesheet(scheme: dict) -> str:
     s = scheme
     fg = s["text"]
     line = s["border"]
-    chevron_right = _data_uri(_GLYPHS["chevron_right"], fg)
-    chevron_down = _data_uri(_GLYPHS["chevron_down"], fg)
-    vline = _data_uri(_GLYPHS["vline"], line)
-    branch_more = _data_uri(_GLYPHS["branch_more"], line)
-    branch_end = _data_uri(_GLYPHS["branch_end"], line)
-    combobox_arrow = _data_uri(_GLYPHS["combobox_arrow"], fg)
+    chevron_right = _tinted_path("chevron_right", fg)
+    chevron_down = _tinted_path("chevron_down", fg)
+    vline = _tinted_path("vline", line)
+    branch_more = _tinted_path("branch_more", line)
+    branch_end = _tinted_path("branch_end", line)
+    combobox_arrow = _tinted_path("combobox_arrow", fg)
     return f"""
     QMainWindow, QDialog {{
         background-color: {s['window']};
@@ -272,16 +281,13 @@ def build_stylesheet(scheme: dict) -> str:
         background-color: {s['highlight']};
     }}
     QTreeView::branch:has-siblings:!adjoins-item {{
-        border-image: none;
-        image: url({vline});
+        border-image: url({vline}) 0;
     }}
     QTreeView::branch:has-siblings:adjoins-item {{
-        border-image: none;
-        image: url({branch_more});
+        border-image: url({branch_more}) 0;
     }}
     QTreeView::branch:!has-children:!has-siblings:adjoins-item {{
-        border-image: none;
-        image: url({branch_end});
+        border-image: url({branch_end}) 0;
     }}
     QTreeView::branch:has-children:!has-siblings:closed,
     QTreeView::branch:has-children:has-siblings:closed {{
