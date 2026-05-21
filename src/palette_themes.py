@@ -1,10 +1,9 @@
 import hashlib
 import os
+import sys
 import tempfile
 
 from PyQt6.QtGui import QColor, QPalette
-
-from utils.utils import resource_path
 
 _GLYPH_NAMES = (
     "chevron_right",
@@ -16,14 +15,26 @@ _GLYPH_NAMES = (
 )
 
 
+def _asset_root() -> str:
+    """Resolve the assets directory regardless of cwd or PyInstaller bundling."""
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, "assets")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+
 def _load_glyphs() -> dict:
     glyphs = {}
+    root = _asset_root()
     for name in _GLYPH_NAMES:
-        path = resource_path(os.path.join("theme", f"{name}.svg"))
+        path = os.path.join(root, "theme", f"{name}.svg")
         try:
             with open(path, "r", encoding="utf-8") as f:
-                glyphs[name] = f.read()
-        except OSError:
+                text = f.read()
+            if not text.strip():
+                raise OSError("empty SVG")
+            glyphs[name] = text
+        except OSError as e:
+            print(f"palette_themes: failed to load {path}: {e}", file=sys.stderr)
             glyphs[name] = ""
     return glyphs
 
@@ -34,13 +45,25 @@ _CACHE_DIR = os.path.join(tempfile.gettempdir(), "finalbigv2_theme")
 
 def _tinted_path(name: str, color: str) -> str:
     """Write a tinted SVG to a temp cache and return a forward-slash file URL."""
+    svg = _GLYPHS.get(name, "")
+    if not svg.strip():
+        return ""
     os.makedirs(_CACHE_DIR, exist_ok=True)
     digest = hashlib.md5(color.encode("ascii")).hexdigest()[:8]
     out = os.path.join(_CACHE_DIR, f"{name}_{digest}.svg")
-    if not os.path.exists(out):
-        tinted = _GLYPHS[name].replace("currentColor", color)
-        with open(out, "w", encoding="utf-8") as f:
+    needs_write = True
+    if os.path.exists(out):
+        try:
+            if os.path.getsize(out) > 0:
+                needs_write = False
+        except OSError:
+            pass
+    if needs_write:
+        tinted = svg.replace("currentColor", color)
+        tmp = out + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             f.write(tinted)
+        os.replace(tmp, out)
     return out.replace("\\", "/")
 
 NORD = {
