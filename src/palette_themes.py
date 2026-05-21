@@ -1,4 +1,38 @@
+import os
+from urllib.parse import quote
+
 from PyQt6.QtGui import QColor, QPalette
+
+from utils.utils import resource_path
+
+_GLYPH_NAMES = (
+    "chevron_right",
+    "chevron_down",
+    "vline",
+    "branch_more",
+    "branch_end",
+    "combobox_arrow",
+)
+
+
+def _load_glyphs() -> dict:
+    glyphs = {}
+    for name in _GLYPH_NAMES:
+        path = resource_path(os.path.join("theme", f"{name}.svg"))
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                glyphs[name] = f.read()
+        except OSError:
+            glyphs[name] = ""
+    return glyphs
+
+
+_GLYPHS = _load_glyphs()
+
+
+def _data_uri(svg_text: str, color: str) -> str:
+    tinted = svg_text.replace("currentColor", color)
+    return "data:image/svg+xml;utf8," + quote(tinted, safe="")
 
 NORD = {
     "is_dark": True,
@@ -149,6 +183,14 @@ def build_palette(scheme: dict) -> QPalette:
 
 def build_stylesheet(scheme: dict) -> str:
     s = scheme
+    fg = s["text"]
+    line = s["border"]
+    chevron_right = _data_uri(_GLYPHS["chevron_right"], fg)
+    chevron_down = _data_uri(_GLYPHS["chevron_down"], fg)
+    vline = _data_uri(_GLYPHS["vline"], line)
+    branch_more = _data_uri(_GLYPHS["branch_more"], line)
+    branch_end = _data_uri(_GLYPHS["branch_end"], line)
+    combobox_arrow = _data_uri(_GLYPHS["combobox_arrow"], fg)
     return f"""
     QMainWindow, QDialog {{
         background-color: {s['window']};
@@ -229,6 +271,28 @@ def build_stylesheet(scheme: dict) -> str:
     QTreeView::branch:selected {{
         background-color: {s['highlight']};
     }}
+    QTreeView::branch:has-siblings:!adjoins-item {{
+        border-image: none;
+        image: url({vline});
+    }}
+    QTreeView::branch:has-siblings:adjoins-item {{
+        border-image: none;
+        image: url({branch_more});
+    }}
+    QTreeView::branch:!has-children:!has-siblings:adjoins-item {{
+        border-image: none;
+        image: url({branch_end});
+    }}
+    QTreeView::branch:has-children:!has-siblings:closed,
+    QTreeView::branch:has-children:has-siblings:closed {{
+        border-image: none;
+        image: url({chevron_right});
+    }}
+    QTreeView::branch:open:has-children:!has-siblings,
+    QTreeView::branch:open:has-children:has-siblings {{
+        border-image: none;
+        image: url({chevron_down});
+    }}
     QScrollBar:vertical {{
         background: {s['base']};
         width: 12px;
@@ -283,10 +347,21 @@ def build_stylesheet(scheme: dict) -> str:
         selection-background-color: {s['highlight']};
         selection-color: {s['highlight_text']};
     }}
+    QComboBox:focus, QComboBox:on {{
+        border: 1px solid {s['highlight']};
+    }}
     QComboBox::drop-down {{
         border: none;
         background: {s['base']};
         width: 16px;
+    }}
+    QComboBox::down-arrow {{
+        image: url({combobox_arrow});
+        width: 10px;
+        height: 10px;
+    }}
+    QComboBox::down-arrow:on {{
+        image: url({chevron_down});
     }}
     QComboBox QAbstractItemView {{
         background-color: {s['base']};
@@ -295,6 +370,7 @@ def build_stylesheet(scheme: dict) -> str:
         selection-background-color: {s['highlight']};
         selection-color: {s['highlight_text']};
         outline: 0;
+        padding: 2px;
     }}
     QCheckBox {{
         color: {s['text']};
