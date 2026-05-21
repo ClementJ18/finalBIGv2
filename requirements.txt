@@ -11,12 +11,12 @@ tbm-utils
 pyBIG
 watchdog
 pyqtdarktheme
+qt-material
 ruff
 PyOpenGL
 PyOpenGL_accelerate
 webbrowser
 moddb
 requests
-git+https://github.com/el1s7/curl-adapter.git -U --ignore-installed
 platformdirs
 numpy

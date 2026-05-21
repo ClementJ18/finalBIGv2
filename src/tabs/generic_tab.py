@@ -77,6 +77,7 @@ class GenericTab(QWidget):
 
         self.unsaved = True
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), unsaved_name(self.name))
+        self.main.update_archive_name()
 
     def save(self):
         if not self.unsaved:
@@ -84,6 +85,7 @@ class GenericTab(QWidget):
 
         self.unsaved = False
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
+        self.main.update_archive_name()
 
     def search(self):
         pass

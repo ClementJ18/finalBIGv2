@@ -9,7 +9,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
 import moddb
-import qdarktheme
 from pyBIG import InDiskArchive, InMemoryArchive, base_archive
 from PyQt6.QtCore import QEvent, Qt, QTimer
 from PyQt6.QtGui import (
@@ -130,10 +129,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.settings = Settings(self)
         self.undo_stack = UndoStack(self.settings.undo_stack_size)
-        if self.settings.dark_mode:
-            qdarktheme.setup_theme("dark", corner_shape="sharp")
-        else:
-            qdarktheme.setup_theme("light", corner_shape="sharp")
+        self.settings.apply_theme()
 
         generate_ui(self)
 
@@ -505,11 +501,20 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if name is None:
             name = self.path or "Untitled Archive"
 
-        title = f"{os.path.basename(name)} - {self.base_name}"
+        prefix = "*" if self.has_unsaved_changes() else ""
+        title = f"{prefix}{os.path.basename(name)} - {self.base_name}"
         if self.workspace_name:
-            title = f"{os.path.basename(name)} [{self.workspace_name}] - {self.base_name}"
+            title = f"{prefix}{os.path.basename(name)} [{self.workspace_name}] - {self.base_name}"
 
         self.setWindowTitle(title)
+
+    def has_unsaved_changes(self) -> bool:
+        if self.archive is not None and getattr(self.archive, "modified_entries", None):
+            return True
+        for i in range(self.tabs.count()):
+            if getattr(self.tabs.widget(i), "unsaved", False):
+                return True
+        return False
 
     def _save(self, path):
         if path is None:
@@ -698,6 +703,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         self.settings.last_dir = os.path.dirname(files[0])
         self.listwidget.add_files(files_added)
+        self.update_archive_name()
 
     def _merge_archives(self, path):
         if self.settings.large_archive:
@@ -728,20 +734,28 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             QApplication.processEvents()
             if self.archive.file_exists(file):
                 if not skip_all:
-                    ret = QMessageBox.question(
-                        self,
-                        "Overwrite file?",
-                        f"<b>{file}</b> already exists, overwrite?",
-                        QMessageBox.StandardButton.Yes
-                        | QMessageBox.StandardButton.No
-                        | QMessageBox.StandardButton.YesToAll,
-                        QMessageBox.StandardButton.No,
-                    )
-                    if ret == QMessageBox.StandardButton.No:
-                        continue
-
-                    if ret == QMessageBox.StandardButton.YesToAll:
+                    default = self.settings.extract_overwrite_default
+                    if default == "yes_to_all":
                         skip_all = True
+                    elif default == "yes":
+                        pass
+                    elif default == "no":
+                        continue
+                    else:
+                        ret = QMessageBox.question(
+                            self,
+                            "Overwrite file?",
+                            f"<b>{file}</b> already exists, overwrite?",
+                            QMessageBox.StandardButton.Yes
+                            | QMessageBox.StandardButton.No
+                            | QMessageBox.StandardButton.YesToAll,
+                            QMessageBox.StandardButton.YesToAll,
+                        )
+                        if ret == QMessageBox.StandardButton.No:
+                            continue
+
+                        if ret == QMessageBox.StandardButton.YesToAll:
+                            skip_all = True
 
                 self.archive.remove_file(file)
 
@@ -898,6 +912,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     skip_all = True
 
         self.listwidget.add_files(files_to_add)
+        self.update_archive_name()
 
     def add_file_to_archive(self, url, name, blank=False, skip_all=False, undoable=True):
         replaced_data = None
@@ -905,17 +920,25 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         if self.archive.file_exists(name):
             replaced_data = self.archive.read_file(name)
             if not skip_all:
-                ret = QMessageBox.question(
-                    self,
-                    "Overwrite file?",
-                    f"<b>{name}</b> already exists, overwrite?",
-                    QMessageBox.StandardButton.Yes
-                    | QMessageBox.StandardButton.No
-                    | QMessageBox.StandardButton.YesToAll,
-                    QMessageBox.StandardButton.No,
-                )
-                if ret == QMessageBox.StandardButton.No:
-                    return ret
+                default = self.settings.add_overwrite_default
+                if default == "yes_to_all":
+                    ret = QMessageBox.StandardButton.YesToAll
+                elif default == "yes":
+                    ret = QMessageBox.StandardButton.Yes
+                elif default == "no":
+                    return QMessageBox.StandardButton.No
+                else:
+                    ret = QMessageBox.question(
+                        self,
+                        "Overwrite file?",
+                        f"<b>{name}</b> already exists, overwrite?",
+                        QMessageBox.StandardButton.Yes
+                        | QMessageBox.StandardButton.No
+                        | QMessageBox.StandardButton.YesToAll,
+                        QMessageBox.StandardButton.YesToAll,
+                    )
+                    if ret == QMessageBox.StandardButton.No:
+                        return ret
 
             self.archive.remove_file(name)
 
@@ -1192,6 +1215,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
     def update_undo_redo_actions(self):
         self.undo_action.setEnabled(self.undo_stack.can_undo)
         self.redo_action.setEnabled(self.undo_stack.can_redo)
+        self.update_archive_name()
 
     def refresh_tabs(self, files: list[str]):
         for i in range(self.tabs.count()):

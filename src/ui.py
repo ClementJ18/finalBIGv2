@@ -35,12 +35,16 @@ class HasUiElements:
     workspace_menu: QMenu
     undo_action: QAction
     redo_action: QAction
-    dark_mode_action: QAction
+    theme_menu: QMenu
+    theme_scaling_menu: QMenu
+    material_themes_menu: QMenu
     use_external_action: QAction
     large_archive_action: QAction
     smart_replace_action: QAction
     preview_action: QAction
     default_view_menu: QMenu
+    extract_overwrite_menu: QMenu
+    add_overwrite_menu: QMenu
     lock_exceptions: list
 
 
@@ -221,12 +225,87 @@ def create_menu(main: "MainWindow"):
 
     option_menu.addSeparator()
 
-    main.dark_mode_action = QAction("&Dark Mode?", main, checkable=True)
-    main.dark_mode_action.setToolTip("Whether to use dark mode or not")
-    main.dark_mode_action.setChecked(main.settings.dark_mode)
-    main.dark_mode_action.triggered.connect(main.settings.toggle_dark_mode)
-    option_menu.addAction(main.dark_mode_action)
-    main.lock_exceptions.append(main.dark_mode_action)
+    main.theme_menu = QMenu("&Theme", main)
+    main.theme_menu.setToolTip("Application color theme")
+    option_menu.addMenu(main.theme_menu)
+    main.lock_exceptions.append(main.theme_menu)
+
+    theme_group = QActionGroup(main)
+    theme_group.setExclusive(True)
+    current_theme = main.settings.theme
+
+    from palette_themes import PALETTE_THEMES
+
+    top_entries = [("Dark (default)", "qdark"), ("Light", "qlight")]
+    for key, (label, _scheme) in PALETTE_THEMES.items():
+        top_entries.append((label, key))
+
+    for label, value in top_entries:
+        action = QAction(label, main, checkable=True)
+        action.setData(value)
+        action.setChecked(current_theme == value)
+        action.triggered.connect(lambda _, v=value: main.settings.set_theme(v))
+        theme_group.addAction(action)
+        main.theme_menu.addAction(action)
+        main.lock_exceptions.append(action)
+
+    try:
+        from qt_material import list_themes
+        qm_themes = sorted(list_themes())
+    except Exception:
+        qm_themes = []
+
+    if qm_themes:
+        main.theme_menu.addSeparator()
+        main.material_themes_menu = QMenu("&Material Design", main)
+        main.material_themes_menu.setToolTip("qt-material Material Design themes")
+        main.theme_menu.addMenu(main.material_themes_menu)
+        main.lock_exceptions.append(main.material_themes_menu)
+
+        def _label(t: str) -> str:
+            base = t[:-4] if t.endswith(".xml") else t
+            return base.replace("_", " ").title()
+
+        dark_themes = [t for t in qm_themes if t.startswith("dark")]
+        light_themes = [t for t in qm_themes if t.startswith("light")]
+        other_themes = [t for t in qm_themes if t not in dark_themes and t not in light_themes]
+
+        for t in dark_themes + light_themes + other_themes:
+            action = QAction(_label(t), main, checkable=True)
+            action.setData(t)
+            action.setChecked(current_theme == t)
+            action.triggered.connect(lambda _, v=t: main.settings.set_theme(v))
+            theme_group.addAction(action)
+            main.material_themes_menu.addAction(action)
+            main.lock_exceptions.append(action)
+
+    main.theme_menu.addSeparator()
+
+    main.theme_scaling_menu = QMenu("Theme &Scaling", main)
+    main.theme_scaling_menu.setToolTip(
+        "Density scale for qt-material themes (lower = more compact). No effect on Dark/Light."
+    )
+    main.theme_menu.addMenu(main.theme_scaling_menu)
+    main.lock_exceptions.append(main.theme_scaling_menu)
+
+    density_group = QActionGroup(main)
+    density_group.setExclusive(True)
+    density_options = [
+        ("Compact (-4)", -4),
+        ("Tight (-3, default)", -3),
+        ("Normal (-2)", -2),
+        ("Comfortable (-1)", -1),
+        ("Spacious (0)", 0),
+    ]
+    current_density = main.settings.theme_density
+    for label, value in density_options:
+        action = QAction(label, main, checkable=True)
+        action.setData(value)
+        action.setChecked(current_density == value)
+        action.triggered.connect(lambda _, v=value: main.settings.set_theme_density(v))
+        density_group.addAction(action)
+        main.theme_scaling_menu.addAction(action)
+        main.lock_exceptions.append(action)
 
     main.use_external_action = QAction("Use &External Programs?", main, checkable=True)
     main.use_external_action.setToolTip(
@@ -261,6 +340,53 @@ def create_menu(main: "MainWindow"):
     main.preview_action.triggered.connect(main.settings.toggle_preview)
     option_menu.addAction(main.preview_action)
     main.lock_exceptions.append(main.preview_action)
+
+    overwrite_options = [
+        ("Ask", "ask"),
+        ("Yes", "yes"),
+        ("No", "no"),
+        ("Yes to All", "yes_to_all"),
+    ]
+
+    main.extract_overwrite_menu = QMenu("&Extract Overwrite Default", main)
+    main.extract_overwrite_menu.setToolTip(
+        "Default response when extracting a file that already exists in the destination archive"
+    )
+    option_menu.addMenu(main.extract_overwrite_menu)
+    main.lock_exceptions.append(main.extract_overwrite_menu)
+
+    extract_overwrite_group = QActionGroup(main)
+    extract_overwrite_group.setExclusive(True)
+    for label, value in overwrite_options:
+        action = QAction(label, main, checkable=True)
+        action.setData(value)
+        action.setChecked(main.settings.extract_overwrite_default == value)
+        action.triggered.connect(
+            lambda _, v=value: main.settings.set_extract_overwrite_default(v)
+        )
+        extract_overwrite_group.addAction(action)
+        main.extract_overwrite_menu.addAction(action)
+        main.lock_exceptions.append(action)
+
+    main.add_overwrite_menu = QMenu("&Add Overwrite Default", main)
+    main.add_overwrite_menu.setToolTip(
+        "Default response when adding a file whose name already exists in the archive"
+    )
+    option_menu.addMenu(main.add_overwrite_menu)
+    main.lock_exceptions.append(main.add_overwrite_menu)
+
+    add_overwrite_group = QActionGroup(main)
+    add_overwrite_group.setExclusive(True)
+    for label, value in overwrite_options:
+        action = QAction(label, main, checkable=True)
+        action.setData(value)
+        action.setChecked(main.settings.add_overwrite_default == value)
+        action.triggered.connect(
+            lambda _, v=value: main.settings.set_add_overwrite_default(v)
+        )
+        add_overwrite_group.addAction(action)
+        main.add_overwrite_menu.addAction(action)
+        main.lock_exceptions.append(action)
 
     main.default_view_menu = QMenu("Default File &View", main)
     main.default_view_menu.setToolTip("Select the default view type when creating new file lists")
