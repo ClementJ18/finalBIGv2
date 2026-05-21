@@ -144,14 +144,6 @@ class Settings:
         self.set_str("settings/theme", value)
 
     @property
-    def theme_density(self) -> int:
-        return self.get_int("settings/theme_density", -3)
-
-    @theme_density.setter
-    def theme_density(self, value: int) -> None:
-        self.set_int("settings/theme_density", value)
-
-    @property
     def encoding(self) -> str:
         return self.get_str("settings/encoding", "latin_1")
 
@@ -333,40 +325,21 @@ class Settings:
         theme = theme if theme is not None else self.theme
         app = QApplication.instance()
 
+        if theme not in ("qdark", "qlight") and theme not in PALETTE_THEMES:
+            theme = "qdark"
+            self.theme = "qdark"
+
         if theme in ("qdark", "qlight"):
             mode = "dark" if theme == "qdark" else "light"
             if hasattr(qdarktheme, "setup_theme"):
                 qdarktheme.setup_theme(mode, corner_shape="sharp")
             else:
                 app.setStyleSheet(qdarktheme.load_stylesheet(mode))
-        elif theme in PALETTE_THEMES:
+        else:
             _, scheme = PALETTE_THEMES[theme]
             app.setStyleSheet("")
             app.setPalette(build_palette(scheme))
             app.setStyleSheet(build_stylesheet(scheme))
-        else:
-            try:
-                from qt_material import apply_stylesheet
-                app_font = app.font()
-                apply_stylesheet(
-                    app,
-                    theme=theme,
-                    invert_secondary=theme.startswith("light"),
-                    extra={
-                        "density_scale": str(self.theme_density),
-                        "font_family": app_font.family(),
-                    },
-                )
-            except Exception as e:
-                QMessageBox.warning(
-                    self.main,
-                    "Theme Error",
-                    f"Failed to apply theme '{theme}': {e}\nFalling back to dark.",
-                )
-                self.theme = "qdark"
-                if hasattr(qdarktheme, "setup_theme"):
-                    qdarktheme.setup_theme("dark", corner_shape="sharp")
-                return
 
         is_dark = self.theme_is_dark(theme)
         self.dark_mode = is_dark
@@ -379,10 +352,6 @@ class Settings:
     def set_theme(self, theme: str):
         self.theme = theme
         self.apply_theme(theme)
-
-    def set_theme_density(self, value: int):
-        self.theme_density = value
-        self.apply_theme()
 
     def toggle_external(self):
         self.external = self.main.use_external_action.isChecked()
