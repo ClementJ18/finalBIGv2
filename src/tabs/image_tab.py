@@ -64,7 +64,7 @@ class ImageTab(GenericTab):
 
         controls_layout = QHBoxLayout()
 
-        self.alpha_button = QPushButton("Show Alpha")
+        self.alpha_button = QPushButton("Show Alphsa")
         self.alpha_button.clicked.connect(self.toggle_alpha_view)
         controls_layout.addWidget(self.alpha_button)
 
