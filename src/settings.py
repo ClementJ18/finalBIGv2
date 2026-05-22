@@ -286,9 +286,13 @@ class Settings:
         self.dark_mode = is_checked
 
         if is_checked:
-            qdarktheme.setup_theme("dark", corner_shape="sharp")
+            qdarktheme.setup_theme(
+                "dark", corner_shape="sharp", additional_qss="QToolTip { border: 0px; }"
+            )
         else:
-            qdarktheme.setup_theme("light", corner_shape="sharp")
+            qdarktheme.setup_theme(
+                "light", corner_shape="sharp", additional_qss="QToolTip { border: 0px; }"
+            )
 
         for x in range(self.main.tabs.count()):
             widget: TextTab = self.main.tabs.widget(x)

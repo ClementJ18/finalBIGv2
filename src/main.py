@@ -131,9 +131,13 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.settings = Settings(self)
         self.undo_stack = UndoStack(self.settings.undo_stack_size)
         if self.settings.dark_mode:
-            qdarktheme.setup_theme("dark", corner_shape="sharp")
+            qdarktheme.setup_theme(
+                "dark", corner_shape="sharp", additional_qss="QToolTip { border: 0px; }"
+            )
         else:
-            qdarktheme.setup_theme("light", corner_shape="sharp")
+            qdarktheme.setup_theme(
+                "light", corner_shape="sharp", additional_qss="QToolTip { border: 0px; }"
+            )
 
         generate_ui(self)
 
