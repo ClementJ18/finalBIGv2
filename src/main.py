@@ -730,29 +730,25 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             )
             QApplication.processEvents()
             if self.archive.file_exists(file):
-                if not skip_all:
-                    default = self.settings.extract_overwrite_default
-                    if default == "yes_to_all":
-                        skip_all = True
-                    elif default == "yes":
-                        pass
-                    elif default == "no":
+                default = "yes" if skip_all else self.settings.extract_overwrite_default
+                if default == "no":
+                    continue
+                if default == "yes_to_all":
+                    skip_all = True
+                elif default == "ask":
+                    ret = QMessageBox.question(
+                        self,
+                        "Overwrite file?",
+                        f"<b>{file}</b> already exists, overwrite?",
+                        QMessageBox.StandardButton.Yes
+                        | QMessageBox.StandardButton.No
+                        | QMessageBox.StandardButton.YesToAll,
+                        QMessageBox.StandardButton.YesToAll,
+                    )
+                    if ret == QMessageBox.StandardButton.No:
                         continue
-                    else:
-                        ret = QMessageBox.question(
-                            self,
-                            "Overwrite file?",
-                            f"<b>{file}</b> already exists, overwrite?",
-                            QMessageBox.StandardButton.Yes
-                            | QMessageBox.StandardButton.No
-                            | QMessageBox.StandardButton.YesToAll,
-                            QMessageBox.StandardButton.YesToAll,
-                        )
-                        if ret == QMessageBox.StandardButton.No:
-                            continue
-
-                        if ret == QMessageBox.StandardButton.YesToAll:
-                            skip_all = True
+                    if ret == QMessageBox.StandardButton.YesToAll:
+                        skip_all = True
 
                 self.archive.remove_file(file)
 
