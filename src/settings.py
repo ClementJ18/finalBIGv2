@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING, List
 import platformdirs
 import qdarktheme
 from PyQt6.QtCore import QSettings
-from PyQt6.QtWidgets import QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 from file_views import ListFileView
+from palette_themes import PALETTE_THEMES, build_palette, build_stylesheet
 from utils.utils import ENCODING_LIST, RECENT_FILES_MAX
 
 if TYPE_CHECKING:
@@ -329,8 +330,6 @@ class Settings:
         )
 
     def theme_is_dark(self, theme: str = None) -> bool:
-        from palette_themes import PALETTE_THEMES
-
         theme = theme if theme is not None else self.theme
         if theme == "qdark":
             return True
@@ -341,10 +340,6 @@ class Settings:
         return theme.startswith("dark")
 
     def apply_theme(self, theme: str = None):
-        from PyQt6.QtWidgets import QApplication
-
-        from palette_themes import PALETTE_THEMES, build_palette, build_stylesheet
-
         theme = theme if theme is not None else self.theme
         app = QApplication.instance()
 
