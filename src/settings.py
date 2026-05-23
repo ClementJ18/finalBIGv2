@@ -2,6 +2,7 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, List
 
 import platformdirs
@@ -15,6 +16,24 @@ from utils.utils import ENCODING_LIST, RECENT_FILES_MAX
 if TYPE_CHECKING:
     from main import MainWindow
     from tabs.text_tab import TextTab
+
+
+class OverwriteDefault(StrEnum):
+    ASK = "ask"
+    OVERWRITE = "overwrite"
+    SKIP = "skip"
+
+    @classmethod
+    def from_stored(cls, raw: str) -> "OverwriteDefault":
+        # Legacy values from before the menu was collapsed.
+        if raw in ("yes", "yes_to_all"):
+            return cls.OVERWRITE
+        if raw == "no":
+            return cls.SKIP
+        try:
+            return cls(raw)
+        except ValueError:
+            return cls.ASK
 
 
 def str_to_bool(value) -> bool:
@@ -184,20 +203,24 @@ class Settings:
         self.set_bool("settings/preview", value)
 
     @property
-    def extract_overwrite_default(self) -> str:
-        return self.get_str("settings/extract_overwrite_default", "ask")
+    def extract_overwrite_default(self) -> OverwriteDefault:
+        return OverwriteDefault.from_stored(
+            self.get_str("settings/extract_overwrite_default", OverwriteDefault.ASK.value)
+        )
 
     @extract_overwrite_default.setter
-    def extract_overwrite_default(self, value: str) -> None:
-        self.set_str("settings/extract_overwrite_default", value)
+    def extract_overwrite_default(self, value: OverwriteDefault) -> None:
+        self.set_str("settings/extract_overwrite_default", value.value)
 
     @property
-    def add_overwrite_default(self) -> str:
-        return self.get_str("settings/add_overwrite_default", "ask")
+    def add_overwrite_default(self) -> OverwriteDefault:
+        return OverwriteDefault.from_stored(
+            self.get_str("settings/add_overwrite_default", OverwriteDefault.ASK.value)
+        )
 
     @add_overwrite_default.setter
-    def add_overwrite_default(self, value: str) -> None:
-        self.set_str("settings/add_overwrite_default", value)
+    def add_overwrite_default(self, value: OverwriteDefault) -> None:
+        self.set_str("settings/add_overwrite_default", value.value)
 
     @property
     def smart_replace_enabled(self) -> bool:
@@ -359,10 +382,10 @@ class Settings:
     def toggle_smart_replace(self):
         self.smart_replace_enabled = self.main.smart_replace_action.isChecked()
 
-    def set_extract_overwrite_default(self, value: str):
+    def set_extract_overwrite_default(self, value: OverwriteDefault):
         self.extract_overwrite_default = value
 
-    def set_add_overwrite_default(self, value: str):
+    def set_add_overwrite_default(self, value: OverwriteDefault):
         self.add_overwrite_default = value
 
     def set_default_file_list_type(self, view_type: str):

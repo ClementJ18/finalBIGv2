@@ -34,7 +34,7 @@ from PyQt6.QtWidgets import (
 from file_views import get_file_view_class
 from misc import NewTabDialog, WrappingInputDialog
 from search import SearchManager
-from settings import FileTab, FileView, Settings, Workplace
+from settings import FileTab, FileView, OverwriteDefault, Settings, Workplace
 from tabs import get_tab_from_file_type
 from ui import HasUiElements, generate_ui
 from undo import AddFileCommand, DeleteFilesCommand, RenameFileCommand, UndoStack
@@ -730,12 +730,12 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             )
             QApplication.processEvents()
             if self.archive.file_exists(file):
-                default = "yes" if skip_all else self.settings.extract_overwrite_default
-                if default == "no":
+                default = (
+                    OverwriteDefault.OVERWRITE if skip_all else self.settings.extract_overwrite_default
+                )
+                if default is OverwriteDefault.SKIP:
                     continue
-                if default == "yes_to_all":
-                    skip_all = True
-                elif default == "ask":
+                if default is OverwriteDefault.ASK:
                     ret = QMessageBox.question(
                         self,
                         "Overwrite file?",
@@ -914,12 +914,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             replaced_data = self.archive.read_file(name)
             if not skip_all:
                 default = self.settings.add_overwrite_default
-                if default == "yes_to_all":
-                    ret = QMessageBox.StandardButton.YesToAll
-                elif default == "yes":
-                    ret = QMessageBox.StandardButton.Yes
-                elif default == "no":
+                if default is OverwriteDefault.SKIP:
                     return QMessageBox.StandardButton.No
+                if default is OverwriteDefault.OVERWRITE:
+                    ret = QMessageBox.StandardButton.YesToAll
                 else:
                     ret = QMessageBox.question(
                         self,

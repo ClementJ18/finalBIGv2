@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from file_views import FileViewTabs, ListFileView, file_view_mapping
 from misc import SearchBox, TabWidget
+from settings import OverwriteDefault
 from utils.utils import resource_path
 
 if TYPE_CHECKING:
@@ -282,10 +283,9 @@ def create_menu(main: "MainWindow"):
     main.lock_exceptions.append(main.preview_action)
 
     overwrite_options = [
-        ("Ask", "ask"),
-        ("Yes", "yes"),
-        ("No", "no"),
-        ("Yes to All", "yes_to_all"),
+        ("Ask", OverwriteDefault.ASK),
+        ("Overwrite", OverwriteDefault.OVERWRITE),
+        ("Skip", OverwriteDefault.SKIP),
     ]
 
     main.extract_overwrite_menu = QMenu("&Extract Overwrite Default", main)
