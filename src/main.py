@@ -509,12 +509,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.setWindowTitle(title)
 
     def has_unsaved_changes(self) -> bool:
-        if self.archive is not None and getattr(self.archive, "modified_entries", None):
+        if self.archive is not None and self.archive.modified_entries:
             return True
-        for i in range(self.tabs.count()):
-            if getattr(self.tabs.widget(i), "unsaved", False):
-                return True
-        return False
+        return any(self.tabs.widget(i).unsaved for i in range(self.tabs.count()))
 
     def _save(self, path):
         if path is None:
