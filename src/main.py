@@ -731,7 +731,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             QApplication.processEvents()
             if self.archive.file_exists(file):
                 default = (
-                    OverwriteDefault.OVERWRITE if skip_all else self.settings.extract_overwrite_default
+                    OverwriteDefault.OVERWRITE
+                    if skip_all
+                    else self.settings.extract_overwrite_default
                 )
                 if default is OverwriteDefault.SKIP:
                     continue

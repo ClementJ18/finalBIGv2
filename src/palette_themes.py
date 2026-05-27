@@ -66,6 +66,7 @@ def _tinted_path(name: str, color: str) -> str:
         os.replace(tmp, out)
     return out.replace("\\", "/")
 
+
 NORD = {
     "is_dark": True,
     "window": "#2E3440",
@@ -225,86 +226,86 @@ def build_stylesheet(scheme: dict) -> str:
     combobox_arrow = _tinted_path("combobox_arrow", fg)
     return f"""
     QMainWindow, QDialog {{
-        background-color: {s['window']};
-        color: {s['window_text']};
+        background-color: {s["window"]};
+        color: {s["window_text"]};
     }}
     QToolTip {{
-        color: {s['tooltip_text']};
-        background-color: {s['tooltip_base']};
-        border: 1px solid {s['border']};
+        color: {s["tooltip_text"]};
+        background-color: {s["tooltip_base"]};
+        border: 1px solid {s["border"]};
     }}
     QMenu {{
-        background-color: {s['base']};
-        color: {s['text']};
-        border: 1px solid {s['border']};
+        background-color: {s["base"]};
+        color: {s["text"]};
+        border: 1px solid {s["border"]};
     }}
     QMenu::item {{
         padding: 4px 24px 4px 24px;
     }}
     QMenu::item:selected {{
-        background-color: {s['menu_hover']};
+        background-color: {s["menu_hover"]};
     }}
     QMenu::separator {{
         height: 1px;
-        background: {s['border']};
+        background: {s["border"]};
         margin: 4px 0;
     }}
     QMenuBar {{
-        background-color: {s['window']};
-        color: {s['window_text']};
+        background-color: {s["window"]};
+        color: {s["window_text"]};
     }}
     QMenuBar::item:selected {{
-        background-color: {s['menu_hover']};
+        background-color: {s["menu_hover"]};
     }}
     QTabWidget::pane {{
-        border: 1px solid {s['border']};
+        border: 1px solid {s["border"]};
     }}
     QTabBar::tab {{
-        background: {s['base']};
-        color: {s['text']};
+        background: {s["base"]};
+        color: {s["text"]};
         padding: 5px 10px;
-        border: 1px solid {s['border']};
+        border: 1px solid {s["border"]};
     }}
     QTabBar::tab:selected {{
-        background: {s['alt_base']};
+        background: {s["alt_base"]};
     }}
     QTabBar::tab:hover {{
-        background: {s['menu_hover']};
+        background: {s["menu_hover"]};
     }}
     QTabBar::tab:disabled {{
-        color: {s['disabled_text']};
+        color: {s["disabled_text"]};
     }}
     QTreeView, QTreeWidget, QListView, QListWidget {{
-        background-color: {s['base']};
-        alternate-background-color: {s['alt_base']};
-        color: {s['text']};
-        border: 1px solid {s['border']};
+        background-color: {s["base"]};
+        alternate-background-color: {s["alt_base"]};
+        color: {s["text"]};
+        border: 1px solid {s["border"]};
         outline: 0;
     }}
     QTreeView::item, QTreeWidget::item, QListView::item, QListWidget::item {{
-        color: {s['text']};
+        color: {s["text"]};
         padding: 2px;
     }}
     QTreeView::item:hover, QTreeWidget::item:hover, QListView::item:hover, QListWidget::item:hover {{
-        background-color: {s['menu_hover']};
+        background-color: {s["menu_hover"]};
     }}
     QTreeView::item:selected, QTreeWidget::item:selected, QListView::item:selected, QListWidget::item:selected {{
-        background-color: {s['highlight']};
-        color: {s['highlight_text']};
+        background-color: {s["highlight"]};
+        color: {s["highlight_text"]};
     }}
     QTreeView::item:selected:!active, QTreeWidget::item:selected:!active,
     QListView::item:selected:!active, QListWidget::item:selected:!active {{
-        background-color: {s['highlight']};
-        color: {s['highlight_text']};
+        background-color: {s["highlight"]};
+        color: {s["highlight_text"]};
     }}
     QTreeView::branch {{
-        background-color: {s['base']};
+        background-color: {s["base"]};
     }}
     QTreeView::branch:hover {{
-        background-color: {s['menu_hover']};
+        background-color: {s["menu_hover"]};
     }}
     QTreeView::branch:selected {{
-        background-color: {s['highlight']};
+        background-color: {s["highlight"]};
     }}
     QTreeView::branch:has-siblings:!adjoins-item {{
         border-image: url({vline}) 0;
@@ -326,32 +327,32 @@ def build_stylesheet(scheme: dict) -> str:
         image: url({chevron_down});
     }}
     QScrollBar:vertical {{
-        background: {s['base']};
+        background: {s["base"]};
         width: 12px;
         border: none;
         margin: 0;
     }}
     QScrollBar:horizontal {{
-        background: {s['base']};
+        background: {s["base"]};
         height: 12px;
         border: none;
         margin: 0;
     }}
     QScrollBar::handle:vertical {{
-        background: {s['scrollbar']};
+        background: {s["scrollbar"]};
         border-radius: 3px;
         min-height: 20px;
     }}
     QScrollBar::handle:horizontal {{
-        background: {s['scrollbar']};
+        background: {s["scrollbar"]};
         border-radius: 3px;
         min-width: 20px;
     }}
     QScrollBar::handle:hover {{
-        background: {s['highlight']};
+        background: {s["highlight"]};
     }}
     QScrollBar::add-page, QScrollBar::sub-page {{
-        background: {s['base']};
+        background: {s["base"]};
     }}
     QScrollBar::add-line, QScrollBar::sub-line {{
         background: none;
@@ -367,24 +368,24 @@ def build_stylesheet(scheme: dict) -> str:
         height: 0;
     }}
     QHeaderView::section {{
-        background-color: {s['base']};
-        color: {s['text']};
+        background-color: {s["base"]};
+        color: {s["text"]};
         padding: 4px;
-        border: 1px solid {s['border']};
+        border: 1px solid {s["border"]};
     }}
     QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox {{
-        background-color: {s['base']};
-        color: {s['text']};
-        border: 1px solid {s['border']};
-        selection-background-color: {s['highlight']};
-        selection-color: {s['highlight_text']};
+        background-color: {s["base"]};
+        color: {s["text"]};
+        border: 1px solid {s["border"]};
+        selection-background-color: {s["highlight"]};
+        selection-color: {s["highlight_text"]};
     }}
     QComboBox:focus, QComboBox:on {{
-        border: 1px solid {s['highlight']};
+        border: 1px solid {s["highlight"]};
     }}
     QComboBox::drop-down {{
         border: none;
-        background: {s['base']};
+        background: {s["base"]};
         width: 16px;
     }}
     QComboBox::down-arrow {{
@@ -396,67 +397,67 @@ def build_stylesheet(scheme: dict) -> str:
         image: url({chevron_down});
     }}
     QComboBox QAbstractItemView {{
-        background-color: {s['base']};
-        color: {s['text']};
-        border: 1px solid {s['border']};
-        selection-background-color: {s['highlight']};
-        selection-color: {s['highlight_text']};
+        background-color: {s["base"]};
+        color: {s["text"]};
+        border: 1px solid {s["border"]};
+        selection-background-color: {s["highlight"]};
+        selection-color: {s["highlight_text"]};
         outline: 0;
         padding: 2px;
     }}
     QCheckBox {{
-        color: {s['text']};
+        color: {s["text"]};
         spacing: 6px;
     }}
     QCheckBox::indicator {{
         width: 14px;
         height: 14px;
-        border: 1px solid {s['border']};
-        background-color: {s['base']};
+        border: 1px solid {s["border"]};
+        background-color: {s["base"]};
     }}
     QCheckBox::indicator:hover {{
-        border: 1px solid {s['highlight']};
+        border: 1px solid {s["highlight"]};
     }}
     QCheckBox::indicator:checked {{
-        background-color: {s['highlight']};
-        border: 1px solid {s['highlight']};
+        background-color: {s["highlight"]};
+        border: 1px solid {s["highlight"]};
     }}
     QCheckBox::indicator:disabled {{
-        background-color: {s['alt_base']};
-        border: 1px solid {s['disabled_text']};
+        background-color: {s["alt_base"]};
+        border: 1px solid {s["disabled_text"]};
     }}
     QPushButton, QToolButton {{
-        background-color: {s['button']};
-        color: {s['button_text']};
-        border: 1px solid {s['border']};
+        background-color: {s["button"]};
+        color: {s["button_text"]};
+        border: 1px solid {s["border"]};
         padding: 4px 10px;
     }}
     QPushButton:hover, QToolButton:hover {{
-        background-color: {s['menu_hover']};
+        background-color: {s["menu_hover"]};
     }}
     QPushButton:pressed, QToolButton:pressed {{
-        background-color: {s['highlight']};
-        color: {s['highlight_text']};
+        background-color: {s["highlight"]};
+        color: {s["highlight_text"]};
     }}
     QPushButton:disabled, QToolButton:disabled {{
-        color: {s['disabled_text']};
+        color: {s["disabled_text"]};
     }}
     QSplitter::handle {{
-        background-color: {s['border']};
+        background-color: {s["border"]};
     }}
     QSplitter::handle:hover {{
-        background-color: {s['highlight']};
+        background-color: {s["highlight"]};
     }}
     QStatusBar {{
-        background-color: {s['window']};
-        color: {s['window_text']};
+        background-color: {s["window"]};
+        color: {s["window_text"]};
     }}
     QGroupBox {{
-        border: 1px solid {s['border']};
+        border: 1px solid {s["border"]};
         margin-top: 8px;
     }}
     QGroupBox::title {{
-        color: {s['text']};
+        color: {s["text"]};
         subcontrol-origin: margin;
         left: 8px;
         padding: 0 4px;

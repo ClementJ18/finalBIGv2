@@ -301,9 +301,7 @@ def create_menu(main: "MainWindow"):
         action = QAction(label, main, checkable=True)
         action.setData(value)
         action.setChecked(main.settings.extract_overwrite_default == value)
-        action.triggered.connect(
-            lambda _, v=value: main.settings.set_extract_overwrite_default(v)
-        )
+        action.triggered.connect(lambda _, v=value: main.settings.set_extract_overwrite_default(v))
         extract_overwrite_group.addAction(action)
         main.extract_overwrite_menu.addAction(action)
         main.lock_exceptions.append(action)
@@ -321,9 +319,7 @@ def create_menu(main: "MainWindow"):
         action = QAction(label, main, checkable=True)
         action.setData(value)
         action.setChecked(main.settings.add_overwrite_default == value)
-        action.triggered.connect(
-            lambda _, v=value: main.settings.set_add_overwrite_default(v)
-        )
+        action.triggered.connect(lambda _, v=value: main.settings.set_add_overwrite_default(v))
         add_overwrite_group.addAction(action)
         main.add_overwrite_menu.addAction(action)
         main.lock_exceptions.append(action)
