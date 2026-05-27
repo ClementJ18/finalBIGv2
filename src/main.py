@@ -743,7 +743,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                         QMessageBox.StandardButton.Yes
                         | QMessageBox.StandardButton.No
                         | QMessageBox.StandardButton.YesToAll,
-                        QMessageBox.StandardButton.YesToAll,
+                        QMessageBox.StandardButton.No,
                     )
                     if ret == QMessageBox.StandardButton.No:
                         continue
@@ -926,7 +926,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                         QMessageBox.StandardButton.Yes
                         | QMessageBox.StandardButton.No
                         | QMessageBox.StandardButton.YesToAll,
-                        QMessageBox.StandardButton.YesToAll,
+                        QMessageBox.StandardButton.No,
                     )
                     if ret == QMessageBox.StandardButton.No:
                         return ret
