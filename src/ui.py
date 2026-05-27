@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from file_views import FileViewTabs, ListFileView, file_view_mapping
 from misc import SearchBox, TabWidget
+from palette_themes import PALETTE_THEMES
 from settings import OverwriteDefault
 from utils.utils import resource_path
 
@@ -232,8 +233,6 @@ def create_menu(main: "MainWindow"):
     theme_group = QActionGroup(main)
     theme_group.setExclusive(True)
     current_theme = main.settings.theme
-
-    from palette_themes import PALETTE_THEMES
 
     top_entries = [("Dark (default)", "qdark"), ("Light", "qlight")]
     for key, (label, _scheme) in PALETTE_THEMES.items():
