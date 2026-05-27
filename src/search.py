@@ -1,5 +1,6 @@
 import fnmatch
 import re
+from functools import partial
 from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog, QMessageBox
@@ -14,10 +15,11 @@ if TYPE_CHECKING:
 
 class SearchManager:
     def search_archive(self: "MainWindow", regex):
+        regex_label = " (Regex)" if regex else ""
         search, ok = QInputDialog.getText(
             self,
             "Search archive",
-            f"This will search through the file list. Search keyword{' (Regex)' if regex else ''}:",
+            f"This will search through the file list. Search keyword{regex_label}:",
         )
         if not ok:
             return
@@ -33,7 +35,8 @@ class SearchManager:
             QMessageBox.information(
                 self,
                 "Search finished",
-                f"Found <b>{returned[1]}</b> instances over <b>{len(matches)}</b> files. Filtering list.",
+                f"Found <b>{returned[1]}</b> instances over "
+                f"<b>{len(matches)}</b> files. Filtering list.",
             )
 
         self.message_box = QMessageBox(
@@ -113,8 +116,6 @@ class SearchManager:
             except re.error:
                 return
         else:
-            from functools import partial
-
             matcher = partial(fnmatch.fnmatch, pat=f"*{search.lower()}*")
 
         file_list.setUpdatesEnabled(False)

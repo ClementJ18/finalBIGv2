@@ -1,4 +1,25 @@
 # Support Python 3.8+.
 target-version = "py310"
-# Set the maximum line length to 79.
 line-length = 99
+
+exclude = ["src/model"]
+
+[lint]
+preview = true  # required for PLC0415
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes (undefined names, unused imports, etc.)
+    "W",      # pycodestyle warnings
+    "I",      # isort (import ordering)
+    "UP",     # pyupgrade (modernize syntax)
+    "B",      # flake8-bugbear (B009 = hardcoded getattr)
+    "C4",     # flake8-comprehensions
+    "PLC0415", # import not at top-level of file
+]
+
+[lint.isort]
+known-first-party = [
+    "file_views", "main", "misc", "palette_themes",
+    "search", "settings", "ui", "undo", "workspaces",
+    "tabs", "utils",
+]

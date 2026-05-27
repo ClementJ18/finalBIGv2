@@ -43,7 +43,8 @@ class MapTab(GenericTab):
         data = QTextEdit(self)
         data.setReadOnly(True)
         data.setText(
-            f"Preview mode for {self.file_type} not supported, double click to edit.\n\n This will use the worldbuilder from your current game installation."
+            f"Preview mode for {self.file_type} not supported, double click to edit.\n\n"
+            " This will use the worldbuilder from your current game installation."
         )
 
         layout.addWidget(data)

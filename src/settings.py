@@ -2,8 +2,8 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import StrEnum
-from typing import TYPE_CHECKING, List
+from enum import Enum
+from typing import TYPE_CHECKING
 
 import platformdirs
 import qdarktheme
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from tabs.text_tab import TextTab
 
 
-class OverwriteDefault(StrEnum):
+class OverwriteDefault(str, Enum):
     ASK = "ask"
     OVERWRITE = "overwrite"
     SKIP = "skip"
@@ -39,7 +39,7 @@ class FileView:
     is_favorite: bool
     type: str
     filter: str
-    files: List[str] = field(default_factory=list)
+    files: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -308,7 +308,11 @@ class Settings:
         is_checked = self.main.large_archive_action.isChecked()
         self.large_archive = is_checked
 
-        message = f"The large archive settings has been {'enabled' if is_checked else 'disabled'}, please restart FinalBIGv2 to apply the change."
+        state = "enabled" if is_checked else "disabled"
+        message = (
+            f"The large archive settings has been {state},"
+            " please restart FinalBIGv2 to apply the change."
+        )
         if is_checked:
             message += "\n\nNote: Large archives takes less memory but may increase loading times."
         QMessageBox.information(
@@ -346,6 +350,8 @@ class Settings:
             app.setStyleSheet("")
             app.setPalette(build_palette(scheme))
             app.setStyleSheet(build_stylesheet(scheme))
+
+        app.setStyleSheet(app.styleSheet() + "\nQToolTip { border: 0px; }")
 
         is_dark = self.theme_is_dark(theme)
         self.dark_mode = is_dark
@@ -385,7 +391,7 @@ class Settings:
     def get_workspace(self, name: str) -> Workplace:
         workspace_file = self.get_workspace_path(name)
         if os.path.exists(workspace_file):
-            with open(workspace_file, "r") as f:
+            with open(workspace_file) as f:
                 return Workplace.from_dict(json.load(f))
 
         return Workplace(

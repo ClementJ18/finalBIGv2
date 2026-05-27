@@ -382,7 +382,7 @@ class GLWidget(QOpenGLWidget):
 
         bone_transforms = []
 
-        for i, pivot in enumerate(hierarchy.pivots):
+        for _, pivot in enumerate(hierarchy.pivots):
             trans = np.eye(4)
             trans[0:3, 3] = [pivot.translation.x, pivot.translation.y, pivot.translation.z]
 
@@ -833,7 +833,7 @@ class W3DTab(GenericTab):
                 w3d_data = self.archive.read_file(file_path)
                 if self._apply_skeleton_data(w3d_data):
                     break
-        except (OSError, IOError) as e:
+        except OSError:
             pass
         except Exception:
             pass
@@ -854,7 +854,7 @@ class W3DTab(GenericTab):
                     image_data = self.archive.read_file(archive_texture_map[texture_base_name])
                     self.gl_widget.set_texture_for_subobject(subobj_name, image_data)
                     self._set_button_loaded(subobj_name)
-        except (OSError, IOError) as e:
+        except OSError:
             pass
         except Exception:
             pass

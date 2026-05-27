@@ -1,6 +1,6 @@
 import os
 import tempfile
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QEvent, QMimeData, QObject, Qt, QUrl
 from PyQt6.QtGui import QDrag
@@ -27,19 +27,19 @@ class BaseFileView:
     def update_list(self):
         raise NotImplementedError
 
-    def add_files(self, files: List[str]):
+    def add_files(self, files: list[str]):
         raise NotImplementedError
 
-    def remove_files(self, files: List[str]):
+    def remove_files(self, files: list[str]):
         raise NotImplementedError
 
     def is_file_selected(self) -> bool:
         raise NotImplementedError
 
-    def get_selected_files(self) -> List[str]:
+    def get_selected_files(self) -> list[str]:
         raise NotImplementedError
 
-    def get_items(self) -> List[QObject]:
+    def get_items(self) -> list[QObject]:
         raise NotImplementedError
 
     def current_item_text(self) -> str:
@@ -118,7 +118,7 @@ class BaseFileView:
             original_mapping = "\n".join(
                 [
                     f"{orig}|{os.path.normpath(temp)}"
-                    for orig, temp in zip(selected_files, temp_files)
+                    for orig, temp in zip(selected_files, temp_files, strict=True)
                 ]
             )
             mime_data.setData("application/x-finalbig-files", original_mapping.encode("utf-8"))
@@ -153,7 +153,7 @@ class ListFileView(QListWidget, BaseFileView):
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
 
-        self.main: "MainWindow" = parent
+        self.main: MainWindow = parent
         self.is_favorite = is_favorite
 
         self.itemClicked.connect(self.main.file_single_clicked)
@@ -181,14 +181,14 @@ class ListFileView(QListWidget, BaseFileView):
 
         self.main.filter_list_from_search()
 
-    def add_files(self, files: List[str]):
+    def add_files(self, files: list[str]):
         new_files = [file for file in files if file not in self.files_list]
 
         if new_files:
             self.addItems(new_files)
             self.files_list.extend(new_files)
 
-    def remove_files(self, files: List[str]):
+    def remove_files(self, files: list[str]):
         files_set = set(files)
         i = 0
         while i < self.count():
@@ -208,10 +208,10 @@ class ListFileView(QListWidget, BaseFileView):
 
         return True
 
-    def get_selected_files(self) -> List[str]:
+    def get_selected_files(self) -> list[str]:
         return [self.get_item_path(item) for item in self.selectedItems()]
 
-    def get_items(self) -> List[QListWidgetItem]:
+    def get_items(self) -> list[QListWidgetItem]:
         return [self.item(i) for i in range(self.count())]
 
     def current_item_text(self) -> str:
@@ -242,7 +242,7 @@ class TreeFileView(QTreeWidget, BaseFileView):
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
 
-        self.main: "MainWindow" = parent
+        self.main: MainWindow = parent
         self.is_favorite = is_favorite
 
         self.itemClicked.connect(self.main.file_single_clicked)
@@ -276,7 +276,7 @@ class TreeFileView(QTreeWidget, BaseFileView):
 
         self.main.filter_list_from_search()
 
-    def add_files(self, files: List[str]):
+    def add_files(self, files: list[str]):
         """Add files with directory structure"""
         for filepath in files:
             if filepath in self.files_list:
@@ -285,7 +285,7 @@ class TreeFileView(QTreeWidget, BaseFileView):
             parts = filepath.replace("\\", "/").split("/")
             parent_item = self.invisibleRootItem()
 
-            for i, part in enumerate(parts[:-1]):
+            for part in parts[:-1]:
                 folder_item = self._find_or_create_folder(parent_item, part)
                 parent_item = folder_item
 
@@ -314,7 +314,7 @@ class TreeFileView(QTreeWidget, BaseFileView):
             self._sort_items_recursively(parent.child(i))
 
         items = []
-        for i in range(parent.childCount()):
+        for _ in range(parent.childCount()):
             items.append(parent.takeChild(0))
 
         items.sort(
@@ -327,7 +327,7 @@ class TreeFileView(QTreeWidget, BaseFileView):
         for item in items:
             parent.addChild(item)
 
-    def remove_files(self, files: List[str]):
+    def remove_files(self, files: list[str]):
         """Remove files by their full paths from the tree structure"""
         files_set = set(files)
 
@@ -368,7 +368,7 @@ class TreeFileView(QTreeWidget, BaseFileView):
 
         cleanup(self.invisibleRootItem())
 
-    def get_selected_files(self) -> List[str]:
+    def get_selected_files(self) -> list[str]:
         selected_files = []
         for item in self.selectedItems():
             file_path = item.data(0, Qt.ItemDataRole.UserRole)
@@ -388,7 +388,7 @@ class TreeFileView(QTreeWidget, BaseFileView):
 
         return True
 
-    def get_items(self) -> List[QTreeWidgetItem]:
+    def get_items(self) -> list[QTreeWidgetItem]:
         items = []
 
         def traverse(item: QTreeWidgetItem):
@@ -463,19 +463,19 @@ class FileViewTabs(QTabWidget):
         return self.currentWidget()
 
     @property
-    def all_lists(self) -> List[BaseFileView]:
+    def all_lists(self) -> list[BaseFileView]:
         return [
             self.widget(i)
             for i in range(self.count() - 1)
-            if isinstance(self.widget(i), (ListFileView, TreeFileView))
+            if isinstance(self.widget(i), ListFileView | TreeFileView)
         ]
 
     @property
-    def all_but_favorite(self) -> List[BaseFileView]:
+    def all_but_favorite(self) -> list[BaseFileView]:
         lists = []
         for i in range(self.count() - 1):
             widget = self.widget(i)
-            if isinstance(widget, (ListFileView, TreeFileView)) and not widget.is_favorite:
+            if isinstance(widget, ListFileView | TreeFileView) and not widget.is_favorite:
                 lists.append(widget)
 
         return lists
@@ -485,11 +485,11 @@ class FileViewTabs(QTabWidget):
         for widget in to_update:
             widget.update_list()
 
-    def add_files(self, files: List[str]):
+    def add_files(self, files: list[str]):
         for widget in self.all_but_favorite:
             self.add_files_to_tab(widget, files)
 
-    def remove_files(self, files: List[str]):
+    def remove_files(self, files: list[str]):
         for widget in self.all_lists:
             self.remove_files_from_tab(widget, files)
 
@@ -497,19 +497,19 @@ class FileViewTabs(QTabWidget):
         self.favorite_list = TreeFileView(self.main, is_favorite=True)
         self.insertTab(0, self.favorite_list, "Favorites")
 
-    def add_favorites(self, files: List[str]):
+    def add_favorites(self, files: list[str]):
         if self.favorite_list is None:
             self.create_favorite_tab()
 
         self.add_files_to_tab(self.favorite_list, files)
 
-    def remove_favorites(self, files: List[str]):
+    def remove_favorites(self, files: list[str]):
         self.remove_files_from_tab(self.favorite_list, files)
 
-    def add_files_to_tab(self, widget: BaseFileView, files: List[str]):
+    def add_files_to_tab(self, widget: BaseFileView, files: list[str]):
         widget.add_files(files)
 
-    def remove_files_from_tab(self, widget: BaseFileView, files: List[str]):
+    def remove_files_from_tab(self, widget: BaseFileView, files: list[str]):
         widget.remove_files(files)
 
     def widget(self, index) -> BaseFileView:

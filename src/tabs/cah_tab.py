@@ -82,7 +82,8 @@ class CustomHero:
         self.reserved1 = int.from_bytes(buffer.read(4), byteorder="little")
         self.reserved2 = int.from_bytes(buffer.read(4), byteorder="little")
         logging.debug(
-            f"class_index: {self.class_index}, sub_class_index: {self.sub_class_index}, reserved1: {self.reserved1}, reserved2: {self.reserved2}"
+            f"class_index: {self.class_index}, sub_class_index: {self.sub_class_index},"
+            f" reserved1: {self.reserved1}, reserved2: {self.reserved2}"
         )
 
         self.color1 = int.from_bytes(buffer.read(4), "little")
@@ -141,7 +142,8 @@ class CustomHero:
         buffer.write(self.blank)
 
         logging.debug(
-            f"Writing headers at position {buffer.tell()}: header1={self.header1}, header2={self.header2}, version={self.version}"
+            f"Writing headers at position {buffer.tell()}: "
+            f"header1={self.header1}, header2={self.header2}, version={self.version}"
         )
         buffer.write(self.header1.to_bytes(4, "little"))
         buffer.write(self.header2.to_bytes(4, "little"))
@@ -154,7 +156,9 @@ class CustomHero:
         buffer.write(self.name.encode("utf-16le"))
 
         logging.debug(
-            f"Writing class_index, sub_class_index, reserved1, reserved2 at position {buffer.tell()}: {self.class_index}, {self.sub_class_index}, {self.reserved1}, {self.reserved2}"
+            f"Writing class_index, sub_class_index, reserved1, reserved2"
+            f" at position {buffer.tell()}: {self.class_index},"
+            f" {self.sub_class_index}, {self.reserved1}, {self.reserved2}"
         )
         buffer.write(self.class_index.to_bytes(4, "little"))
         buffer.write(self.sub_class_index.to_bytes(4, "little"))
@@ -162,7 +166,8 @@ class CustomHero:
         buffer.write(self.reserved2.to_bytes(4, "little"))
 
         logging.debug(
-            f"Writing colors at position {buffer.tell()}: {self.color1}, {self.color2}, {self.color3}"
+            f"Writing colors at position {buffer.tell()}: "
+            f"{self.color1}, {self.color2}, {self.color3}"
         )
         buffer.write(self.color1.to_bytes(4, "little"))
         buffer.write(self.color2.to_bytes(4, "little"))
@@ -344,7 +349,7 @@ class CustomHeroTab(GenericTab):
             widget = item.widget()
             if widget:
                 # For text input fields
-                if isinstance(widget, (QLineEdit, QTextEdit)):
+                if isinstance(widget, QLineEdit | QTextEdit):
                     widget.setReadOnly(read_only)
                 # For tables
                 elif isinstance(widget, QTableWidget):

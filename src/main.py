@@ -51,7 +51,7 @@ from workspaces import WorkspaceDialog
 if TYPE_CHECKING:
     from tabs.generic_tab import GenericTab
 
-__version__ = "0.15.2"
+__version__ = "0.16.0"
 
 basedir = os.path.dirname(__file__)
 
@@ -88,7 +88,9 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     errorbox = QMessageBox(
         QMessageBox.Icon.Critical,
         "Uncaught Exception",
-        f"Oops. An unexpected error occured. Please copy and submit to <a href='https://github.com/ClementJ18/finalBIGv2/issues'>here</a> if possible.\n<pre>{tb}</pre>",
+        f"Oops. An unexpected error occured. Please copy and submit to "
+        f"<a href='https://github.com/ClementJ18/finalBIGv2/issues'>here</a>"
+        f" if possible.\n<pre>{tb}</pre>",
     )
     copy_button = QPushButton("Copy to clipboard")
     errorbox.addButton(copy_button, QMessageBox.ButtonRole.ActionRole)
@@ -187,7 +189,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             msg = QMessageBox(
                 QMessageBox.Icon.Information,
                 "Update Available",
-                f"A new version of FinalBIGv2 is available: {latest_version}\nYou are currently using version: {__version__}\n\nWould you like to visit the download page?",
+                f"A new version of FinalBIGv2 is available: {latest_version}\n"
+                f"You are currently using version: {__version__}\n\n"
+                "Would you like to visit the download page?",
                 parent=self,
             )
             msg.addButton(QPushButton("Yes"), QMessageBox.ButtonRole.YesRole)
@@ -223,7 +227,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             ret = QMessageBox.question(
                 self,
                 "Archive Not Found",
-                f"The archive path stored in this workspace does not exist:\n{archive_path}\n\nWould you like to locate it?",
+                f"The archive path stored in this workspace does not exist:\n"
+                f"{archive_path}\n\nWould you like to locate it?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
             )
@@ -255,7 +260,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 ret = QMessageBox.question(
                     self,
                     "Archive Not Found",
-                    f"The archive path stored in this workspace does not exist:\n{archive_path}\n\nWould you like to locate it?",
+                    f"The archive path stored in this workspace does not exist:\n"
+                    f"{archive_path}\n\nWould you like to locate it?",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.Yes,
                 )
@@ -534,14 +540,16 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             QMessageBox.warning(
                 self,
                 "File Size Error",
-                "File has reached maximum size, the BIG format only supports up to 4.3GB per archive. Please remove some files and try saving again.",
+                "File has reached maximum size, the BIG format only supports up to "
+                "4.3GB per archive. Please remove some files and try saving again.",
             )
             return False
         except PermissionError:
             QMessageBox.critical(
                 self,
                 "Failed",
-                "Could not save due to missing permissions. Save somewhere this application has access and restart the application as admin.",
+                "Could not save due to missing permissions. Save somewhere this "
+                "application has access and restart the application as admin.",
             )
             return False
 
@@ -716,7 +724,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         text_box = QMessageBox(
             QMessageBox.Icon.Information,
             "Processing archives",
-            f"Processing archive: <b>{path}</b><br>Getting ready to start processing archive. Found {length} files",
+            f"Processing archive: <b>{path}</b><br>"
+            f"Getting ready to start processing archive. Found {length} files",
             parent=self,
         )
         text_box.setStandardButtons(QMessageBox.StandardButton.NoButton)
@@ -726,7 +735,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         for index, file in enumerate(files):
             text_box.setText(
-                f"Processing archive: <b>{path}</b><br>File: ({index + 1}/{length})<br>Processing: <b>{file}</b>"
+                f"Processing archive: <b>{path}</b><br>"
+                f"File: ({index + 1}/{length})<br>Processing: <b>{file}</b>"
             )
             QApplication.processEvents()
             if self.archive.file_exists(file):
@@ -768,7 +778,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     QMessageBox.warning(
                         self,
                         "File Size Error",
-                        "File has reached maximum size, the BIG format only supports up to 4.3GB per archive.",
+                        "File has reached maximum size, the BIG format only supports "
+                        "up to 4.3GB per archive.",
                     )
                     self.archive.modified_entries = {}
                     break
@@ -868,7 +879,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         return ret
 
     def _add_file_with_name(self, url, suggested_name, *, blank=False, ask_name=True):
-        """Add a file to archive with a pre-suggested name (e.g., from drag-drop between archives)"""
+        """Add a file to archive with a pre-suggested name
+        (e.g., from drag-drop between archives).
+        """
         name = suggested_name
 
         if ask_name:

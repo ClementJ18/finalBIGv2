@@ -4,9 +4,9 @@ import sys
 keywords = set()
 behaviors = set()
 
-for path, directories, files in os.walk(sys.argv[1]):
+for path, _, files in os.walk(sys.argv[1]):
     for file in files:
-        with open(os.path.join(path, file), "r", encoding="Latin-1") as f:
+        with open(os.path.join(path, file), encoding="Latin-1") as f:
             lines = f.read().splitlines()
 
             for line in lines:

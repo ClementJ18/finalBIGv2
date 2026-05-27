@@ -4,7 +4,7 @@ import sys
 
 SEARCH_HISTORY_MAX = 20
 RECENT_FILES_MAX = 10
-HELP_STRING = """
+HELP_STRING = r"""
 <h2>Shortcuts</h2>
 <h3>In File List</h3>
 <ul>
@@ -28,7 +28,7 @@ HELP_STRING = """
 </ul>
 
 <h2> File Search </h2>
-File search is based on Unix filename pattern. This means that something like 
+File search is based on Unix filename pattern. This means that something like
 "sauron.ini" will look for a file called exactly "sauron.ini". If you're looking for
 something like "data\ini\objects\sauron.ini" make sure you add a * to match everything
 before. Like "*\sauron.ini".<br/>
@@ -48,8 +48,8 @@ ABOUT_STRING = """
 FinalBIG crashing all the time. It's not perfect either but it works on his machine and
 maybe it'll work on other people's machines.<br/>
 
-Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>. 
-Suggestions and bug reports should also go there. 
+Source code is available <a href="https://github.com/ClementJ18/finalBIGv2">here</a>.
+Suggestions and bug reports should also go there.
 Updated by Tria For C&C Generals (BIGF support) & Additional Changes.<br/><br/>
 
 Version: <b>{version}</b>

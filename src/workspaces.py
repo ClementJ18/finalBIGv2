@@ -1,7 +1,7 @@
 import os
 import webbrowser
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -22,7 +22,10 @@ if TYPE_CHECKING:
 
 
 class WorkspaceDialog(QDialog):
-    def __init__(self, parent: "MainWindow" = None, workspaces: List[str] = []):
+    def __init__(self, parent: "MainWindow" = None, workspaces: list[str] = None):
+        if workspaces is None:
+            workspaces = []
+
         super().__init__(parent)
         self.main = parent
         self.workspaces = workspaces

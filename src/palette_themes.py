@@ -28,7 +28,7 @@ def _load_glyphs() -> dict:
     for name in _GLYPH_NAMES:
         path = os.path.join(root, "theme", f"{name}.svg")
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 text = f.read()
             if not text.strip():
                 raise OSError("empty SVG")
@@ -243,7 +243,8 @@ def build_stylesheet(scheme: dict) -> str:
         padding: 4px 24px 4px 24px;
     }}
     QMenu::item:selected {{
-        background-color: {s["menu_hover"]};
+        background-color: {s["highlight"]};
+        color: {s["highlight_text"]};
     }}
     QMenu::separator {{
         height: 1px;
@@ -255,7 +256,8 @@ def build_stylesheet(scheme: dict) -> str:
         color: {s["window_text"]};
     }}
     QMenuBar::item:selected {{
-        background-color: {s["menu_hover"]};
+        background-color: {s["highlight"]};
+        color: {s["highlight_text"]};
     }}
     QTabWidget::pane {{
         border: 1px solid {s["border"]};
@@ -286,10 +288,12 @@ def build_stylesheet(scheme: dict) -> str:
         color: {s["text"]};
         padding: 2px;
     }}
-    QTreeView::item:hover, QTreeWidget::item:hover, QListView::item:hover, QListWidget::item:hover {{
+    QTreeView::item:hover, QTreeWidget::item:hover,
+    QListView::item:hover, QListWidget::item:hover {{
         background-color: {s["menu_hover"]};
     }}
-    QTreeView::item:selected, QTreeWidget::item:selected, QListView::item:selected, QListWidget::item:selected {{
+    QTreeView::item:selected, QTreeWidget::item:selected,
+    QListView::item:selected, QListWidget::item:selected {{
         background-color: {s["highlight"]};
         color: {s["highlight_text"]};
     }}

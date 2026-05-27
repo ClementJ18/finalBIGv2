@@ -11,10 +11,10 @@ class ArchiveCommand:
     def description(self) -> str:
         return "Unknown"
 
-    def undo(self, main: "MainWindow") -> None:
+    def undo(self, main: MainWindow) -> None:
         raise NotImplementedError
 
-    def redo(self, main: "MainWindow") -> None:
+    def redo(self, main: MainWindow) -> None:
         raise NotImplementedError
 
 
@@ -28,7 +28,7 @@ class AddFileCommand(ArchiveCommand):
     def description(self) -> str:
         return f"Add '{self.name}'"
 
-    def undo(self, main: "MainWindow") -> None:
+    def undo(self, main: MainWindow) -> None:
         main.archive.remove_file(self.name)
         if self.replaced_data is not None:
             main.archive.add_file(self.name, self.replaced_data)
@@ -39,7 +39,7 @@ class AddFileCommand(ArchiveCommand):
             if main.tabs.widget(i).name == self.name:
                 main.tabs.remove_tab(i)
 
-    def redo(self, main: "MainWindow") -> None:
+    def redo(self, main: MainWindow) -> None:
         if main.archive.file_exists(self.name):
             main.archive.remove_file(self.name)
         else:
@@ -59,14 +59,14 @@ class DeleteFilesCommand(ArchiveCommand):
             return f"Delete '{self.files_data[0][0]}'"
         return f"Delete {len(self.files_data)} files"
 
-    def undo(self, main: "MainWindow") -> None:
+    def undo(self, main: MainWindow) -> None:
         names = []
         for name, data in self.files_data:
             main.archive.add_file(name, data)
             names.append(name)
         main.listwidget.add_files(names)
 
-    def redo(self, main: "MainWindow") -> None:
+    def redo(self, main: MainWindow) -> None:
         names = [name for name, _ in self.files_data]
         for name in names:
             main.archive.remove_file(name)
@@ -87,7 +87,7 @@ class RenameFileCommand(ArchiveCommand):
     def description(self) -> str:
         return f"Rename '{self.old_name}'"
 
-    def undo(self, main: "MainWindow") -> None:
+    def undo(self, main: MainWindow) -> None:
         data = main.archive.read_file(self.new_name)
         for i in reversed(range(main.tabs.count())):
             if main.tabs.widget(i).name == self.new_name:
@@ -97,7 +97,7 @@ class RenameFileCommand(ArchiveCommand):
         main.listwidget.remove_files([self.new_name])
         main.listwidget.add_files([self.old_name])
 
-    def redo(self, main: "MainWindow") -> None:
+    def redo(self, main: MainWindow) -> None:
         data = main.archive.read_file(self.old_name)
         for i in reversed(range(main.tabs.count())):
             if main.tabs.widget(i).name == self.old_name:
@@ -127,7 +127,7 @@ class UndoStack:
             self._undo.pop(0)
         self._redo.clear()
 
-    def undo(self, main: "MainWindow") -> str | None:
+    def undo(self, main: MainWindow) -> str | None:
         if not self._undo:
             return None
         command = self._undo.pop()
@@ -135,7 +135,7 @@ class UndoStack:
         self._redo.append(command)
         return command.description
 
-    def redo(self, main: "MainWindow") -> str | None:
+    def redo(self, main: MainWindow) -> str | None:
         if not self._redo:
             return None
         command = self._redo.pop()

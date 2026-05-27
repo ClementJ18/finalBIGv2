@@ -455,7 +455,7 @@ class TextTab(GenericTab):
 
     def save(self):
         if self.external:
-            with open(self.path, "r", encoding=self.main.settings.encoding) as f:
+            with open(self.path, encoding=self.main.settings.encoding) as f:
                 data = f.read()
         else:
             data = self.text_widget.text()
