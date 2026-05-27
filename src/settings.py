@@ -2,19 +2,27 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, List
 
 import platformdirs
 import qdarktheme
 from PyQt6.QtCore import QSettings
-from PyQt6.QtWidgets import QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 from file_views import ListFileView
+from palette_themes import PALETTE_THEMES, build_palette, build_stylesheet
 from utils.utils import ENCODING_LIST, RECENT_FILES_MAX
 
 if TYPE_CHECKING:
     from main import MainWindow
     from tabs.text_tab import TextTab
+
+
+class OverwriteDefault(StrEnum):
+    ASK = "ask"
+    OVERWRITE = "overwrite"
+    SKIP = "skip"
 
 
 def str_to_bool(value) -> bool:
@@ -136,6 +144,14 @@ class Settings:
         self.set_bool("settings/dark_mode", value)
 
     @property
+    def theme(self) -> str:
+        return self.get_str("settings/theme", "qdark")
+
+    @theme.setter
+    def theme(self, value: str) -> None:
+        self.set_str("settings/theme", value)
+
+    @property
     def encoding(self) -> str:
         return self.get_str("settings/encoding", "latin_1")
 
@@ -174,6 +190,26 @@ class Settings:
     @preview_enabled.setter
     def preview_enabled(self, value: bool) -> None:
         self.set_bool("settings/preview", value)
+
+    @property
+    def extract_overwrite_default(self) -> OverwriteDefault:
+        return OverwriteDefault(
+            self.get_str("settings/extract_overwrite_default", OverwriteDefault.ASK.value)
+        )
+
+    @extract_overwrite_default.setter
+    def extract_overwrite_default(self, value: OverwriteDefault) -> None:
+        self.set_str("settings/extract_overwrite_default", value.value)
+
+    @property
+    def add_overwrite_default(self) -> OverwriteDefault:
+        return OverwriteDefault(
+            self.get_str("settings/add_overwrite_default", OverwriteDefault.ASK.value)
+        )
+
+    @add_overwrite_default.setter
+    def add_overwrite_default(self, value: OverwriteDefault) -> None:
+        self.set_str("settings/add_overwrite_default", value.value)
 
     @property
     def smart_replace_enabled(self) -> bool:
@@ -281,29 +317,59 @@ class Settings:
             message,
         )
 
-    def toggle_dark_mode(self):
-        is_checked = self.main.dark_mode_action.isChecked()
-        self.dark_mode = is_checked
+    def theme_is_dark(self, theme: str = None) -> bool:
+        theme = theme if theme is not None else self.theme
+        if theme == "qdark":
+            return True
+        if theme == "qlight":
+            return False
+        if theme in PALETTE_THEMES:
+            return PALETTE_THEMES[theme][1]["is_dark"]
+        return theme.startswith("dark")
 
-        if is_checked:
-            qdarktheme.setup_theme(
-                "dark", corner_shape="sharp", additional_qss="QToolTip { border: 0px; }"
-            )
+    def apply_theme(self, theme: str = None):
+        theme = theme if theme is not None else self.theme
+        app = QApplication.instance()
+
+        if theme not in ("qdark", "qlight") and theme not in PALETTE_THEMES:
+            theme = "qdark"
+            self.theme = "qdark"
+
+        if theme in ("qdark", "qlight"):
+            mode = "dark" if theme == "qdark" else "light"
+            if hasattr(qdarktheme, "setup_theme"):
+                qdarktheme.setup_theme(mode, corner_shape="sharp")
+            else:
+                app.setStyleSheet(qdarktheme.load_stylesheet(mode))
         else:
-            qdarktheme.setup_theme(
-                "light", corner_shape="sharp", additional_qss="QToolTip { border: 0px; }"
-            )
+            _, scheme = PALETTE_THEMES[theme]
+            app.setStyleSheet("")
+            app.setPalette(build_palette(scheme))
+            app.setStyleSheet(build_stylesheet(scheme))
 
-        for x in range(self.main.tabs.count()):
-            widget: TextTab = self.main.tabs.widget(x)
-            if hasattr(widget, "text_widget"):
-                widget.text_widget.toggle_dark_mode(is_checked)
+        is_dark = self.theme_is_dark(theme)
+        self.dark_mode = is_dark
+        if hasattr(self.main, "tabs"):
+            for x in range(self.main.tabs.count()):
+                widget: TextTab = self.main.tabs.widget(x)
+                if hasattr(widget, "text_widget"):
+                    widget.text_widget.toggle_dark_mode(is_dark)
+
+    def set_theme(self, theme: str):
+        self.theme = theme
+        self.apply_theme(theme)
 
     def toggle_external(self):
         self.external = self.main.use_external_action.isChecked()
 
     def toggle_smart_replace(self):
         self.smart_replace_enabled = self.main.smart_replace_action.isChecked()
+
+    def set_extract_overwrite_default(self, value: OverwriteDefault):
+        self.extract_overwrite_default = value
+
+    def set_add_overwrite_default(self, value: OverwriteDefault):
+        self.add_overwrite_default = value
 
     def set_default_file_list_type(self, view_type: str):
         """Set the default file list view type."""

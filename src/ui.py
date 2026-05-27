@@ -15,6 +15,8 @@ from PyQt6.QtWidgets import (
 
 from file_views import FileViewTabs, ListFileView, file_view_mapping
 from misc import SearchBox, TabWidget
+from palette_themes import PALETTE_THEMES
+from settings import OverwriteDefault
 from utils.utils import resource_path
 
 if TYPE_CHECKING:
@@ -35,12 +37,14 @@ class HasUiElements:
     workspace_menu: QMenu
     undo_action: QAction
     redo_action: QAction
-    dark_mode_action: QAction
+    theme_menu: QMenu
     use_external_action: QAction
     large_archive_action: QAction
     smart_replace_action: QAction
     preview_action: QAction
     default_view_menu: QMenu
+    extract_overwrite_menu: QMenu
+    add_overwrite_menu: QMenu
     lock_exceptions: list
 
 
@@ -222,12 +226,27 @@ def create_menu(main: "MainWindow"):
 
     option_menu.addSeparator()
 
-    main.dark_mode_action = QAction("&Dark Mode?", main, checkable=True)
-    main.dark_mode_action.setToolTip("Whether to use dark mode or not")
-    main.dark_mode_action.setChecked(main.settings.dark_mode)
-    main.dark_mode_action.triggered.connect(main.settings.toggle_dark_mode)
-    option_menu.addAction(main.dark_mode_action)
-    main.lock_exceptions.append(main.dark_mode_action)
+    main.theme_menu = QMenu("&Theme", main)
+    main.theme_menu.setToolTip("Application color theme")
+    option_menu.addMenu(main.theme_menu)
+    main.lock_exceptions.append(main.theme_menu)
+
+    theme_group = QActionGroup(main)
+    theme_group.setExclusive(True)
+    current_theme = main.settings.theme
+
+    top_entries = [("Dark (default)", "qdark"), ("Light", "qlight")]
+    for key, (label, _scheme) in PALETTE_THEMES.items():
+        top_entries.append((label, key))
+
+    for label, value in top_entries:
+        action = QAction(label, main, checkable=True)
+        action.setData(value)
+        action.setChecked(current_theme == value)
+        action.triggered.connect(lambda _, v=value: main.settings.set_theme(v))
+        theme_group.addAction(action)
+        main.theme_menu.addAction(action)
+        main.lock_exceptions.append(action)
 
     main.use_external_action = QAction("Use &External Programs?", main, checkable=True)
     main.use_external_action.setToolTip(
@@ -262,6 +281,48 @@ def create_menu(main: "MainWindow"):
     main.preview_action.triggered.connect(main.settings.toggle_preview)
     option_menu.addAction(main.preview_action)
     main.lock_exceptions.append(main.preview_action)
+
+    overwrite_options = [
+        ("Ask", OverwriteDefault.ASK),
+        ("Overwrite", OverwriteDefault.OVERWRITE),
+        ("Skip", OverwriteDefault.SKIP),
+    ]
+
+    main.extract_overwrite_menu = QMenu("&Extract Overwrite Default", main)
+    main.extract_overwrite_menu.setToolTip(
+        "Default response when extracting a file that already exists in the destination archive"
+    )
+    option_menu.addMenu(main.extract_overwrite_menu)
+    main.lock_exceptions.append(main.extract_overwrite_menu)
+
+    extract_overwrite_group = QActionGroup(main)
+    extract_overwrite_group.setExclusive(True)
+    for label, value in overwrite_options:
+        action = QAction(label, main, checkable=True)
+        action.setData(value)
+        action.setChecked(main.settings.extract_overwrite_default == value)
+        action.triggered.connect(lambda _, v=value: main.settings.set_extract_overwrite_default(v))
+        extract_overwrite_group.addAction(action)
+        main.extract_overwrite_menu.addAction(action)
+        main.lock_exceptions.append(action)
+
+    main.add_overwrite_menu = QMenu("&Add Overwrite Default", main)
+    main.add_overwrite_menu.setToolTip(
+        "Default response when adding a file whose name already exists in the archive"
+    )
+    option_menu.addMenu(main.add_overwrite_menu)
+    main.lock_exceptions.append(main.add_overwrite_menu)
+
+    add_overwrite_group = QActionGroup(main)
+    add_overwrite_group.setExclusive(True)
+    for label, value in overwrite_options:
+        action = QAction(label, main, checkable=True)
+        action.setData(value)
+        action.setChecked(main.settings.add_overwrite_default == value)
+        action.triggered.connect(lambda _, v=value: main.settings.set_add_overwrite_default(v))
+        add_overwrite_group.addAction(action)
+        main.add_overwrite_menu.addAction(action)
+        main.lock_exceptions.append(action)
 
     main.default_view_menu = QMenu("Default File &View", main)
     main.default_view_menu.setToolTip("Select the default view type when creating new file lists")
