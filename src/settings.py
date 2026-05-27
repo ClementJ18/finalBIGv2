@@ -24,18 +24,6 @@ class OverwriteDefault(StrEnum):
     OVERWRITE = "overwrite"
     SKIP = "skip"
 
-    @classmethod
-    def from_stored(cls, raw: str) -> "OverwriteDefault":
-        # Legacy values from before the menu was collapsed.
-        if raw in ("yes", "yes_to_all"):
-            return cls.OVERWRITE
-        if raw == "no":
-            return cls.SKIP
-        try:
-            return cls(raw)
-        except ValueError:
-            return cls.ASK
-
 
 def str_to_bool(value) -> bool:
     """Convert QSettings string/integer value to boolean."""
@@ -205,7 +193,7 @@ class Settings:
 
     @property
     def extract_overwrite_default(self) -> OverwriteDefault:
-        return OverwriteDefault.from_stored(
+        return OverwriteDefault(
             self.get_str("settings/extract_overwrite_default", OverwriteDefault.ASK.value)
         )
 
@@ -215,7 +203,7 @@ class Settings:
 
     @property
     def add_overwrite_default(self) -> OverwriteDefault:
-        return OverwriteDefault.from_stored(
+        return OverwriteDefault(
             self.get_str("settings/add_overwrite_default", OverwriteDefault.ASK.value)
         )
 
