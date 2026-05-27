@@ -238,6 +238,9 @@ def build_stylesheet(scheme: dict) -> str:
         color: {s['text']};
         border: 1px solid {s['border']};
     }}
+    QMenu::item {{
+        padding: 4px 24px 4px 24px;
+    }}
     QMenu::item:selected {{
         background-color: {s['menu_hover']};
     }}

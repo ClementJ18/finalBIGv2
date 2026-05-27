@@ -217,6 +217,7 @@ def create_menu(main: "MainWindow"):
     search_achive_regex_action.setShortcut(QKeySequence("ALT+SHIFT+F"))
 
     option_menu = menu.addMenu("&Help")
+    option_menu.setToolTipsVisible(True)
     main.lock_exceptions.append(option_menu.addAction("&About", main.show_about))
 
     help_action = option_menu.addAction("&Help", main.show_help)
