@@ -703,12 +703,16 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         files.reverse()
         files_added = []
+        overwritten_names = []
         for file in files:
-            files_added.extend(self._merge_archives(file))
+            added, overwritten = self._merge_archives(file)
+            files_added.extend(added)
+            overwritten_names.extend(overwritten)
 
         self.settings.last_dir = os.path.dirname(files[0])
         self.listwidget.add_files(files_added)
         self.update_archive_name()
+        self._show_add_summary(len(files_added) - len(overwritten_names), overwritten_names)
 
     def _merge_archives(self, path):
         if self.settings.large_archive:
@@ -719,6 +723,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         skip_all = False
         files_added = []
+        overwritten_names = []
         files = archive.file_list()
         length = len(files)
         text_box = QMessageBox(
@@ -739,6 +744,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 f"File: ({index + 1}/{length})<br>Processing: <b>{file}</b>"
             )
             QApplication.processEvents()
+            overwrote = False
             if self.archive.file_exists(file):
                 default = (
                     OverwriteDefault.OVERWRITE
@@ -763,10 +769,13 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                         skip_all = True
 
                 self.archive.remove_file(file)
+                overwrote = True
 
             self.archive.add_file(file, archive.read_file(file))
 
             files_added.append(file)
+            if overwrote:
+                overwritten_names.append(file)
 
             size = self.archive.archive_memory_size()
             if size > 524288000:
@@ -789,7 +798,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         )
         text_box.accept()
 
-        return files_added
+        return files_added, overwritten_names
 
     def new(self):
         self._new()
@@ -843,7 +852,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
     def new_file(self):
         self._add_file(None, blank=True)
 
-    def _add_file(self, url, *, blank=False, ask_name=True):
+    def _add_file(self, url, *, blank=False, ask_name=True, show_summary=True):
         name = normalize_name(url)
         if self.settings.smart_replace_enabled:
             files = self.archive.file_list()
@@ -876,9 +885,14 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.listwidget.add_files([name])
             self.refresh_tabs([name])
 
+        if show_summary:
+            new, overwritten = self._classify_add(ret)
+            self._show_add_summary(new, [name] if overwritten else [])
         return ret
 
-    def _add_file_with_name(self, url, suggested_name, *, blank=False, ask_name=True):
+    def _add_file_with_name(
+        self, url, suggested_name, *, blank=False, ask_name=True, show_summary=True
+    ):
         """Add a file to archive with a pre-suggested name
         (e.g., from drag-drop between archives).
         """
@@ -899,12 +913,17 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.listwidget.add_files([name])
             self.refresh_tabs([name])
 
+        if show_summary:
+            new, overwritten = self._classify_add(ret)
+            self._show_add_summary(new, [name] if overwritten else [])
         return ret
 
-    def _add_folder(self, url):
+    def _add_folder(self, url, *, show_summary=True):
         skip_all = False
         common_dir = os.path.dirname(url)
         files_to_add = []
+        new_count = 0
+        overwritten_names = []
         for root, _, files in os.walk(url):
             for f in files:
                 full_path = os.path.join(root, f)
@@ -916,11 +935,19 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 if ret != QMessageBox.StandardButton.No:
                     files_to_add.append(name)
 
+                new, overwritten = self._classify_add(ret)
+                new_count += new
+                if overwritten:
+                    overwritten_names.append(name)
+
                 if ret == QMessageBox.StandardButton.YesToAll:
                     skip_all = True
 
         self.listwidget.add_files(files_to_add)
         self.update_archive_name()
+        if show_summary:
+            self._show_add_summary(new_count, overwritten_names)
+        return new_count, overwritten_names
 
     def add_file_to_archive(self, url, name, blank=False, skip_all=False, undoable=True):
         replaced_data = None
@@ -963,6 +990,35 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             self.update_undo_redo_actions()
 
         return ret
+
+    @staticmethod
+    def _classify_add(ret) -> tuple[int, int]:
+        """Map an add_file_to_archive return value to (new, overwritten) counts.
+
+        ``None`` means a new file was added; ``Yes``/``YesToAll`` means an
+        existing file was overwritten; ``No`` (skipped) and ``False`` (rename
+        cancelled) mean nothing was added.
+        """
+        if ret is False or ret == QMessageBox.StandardButton.No:
+            return 0, 0
+        if ret is None:
+            return 1, 0
+        return 0, 1
+
+    def _show_add_summary(self, new_count: int, overwritten_names: list[str]) -> None:
+        overwritten_count = len(overwritten_names)
+        total = new_count + overwritten_count
+        if total == 0:
+            return
+        box = QMessageBox(
+            QMessageBox.Icon.Information,
+            "Files added",
+            f"Added {total} file(s) — {new_count} new, {overwritten_count} overwritten.",
+            parent=self,
+        )
+        if overwritten_names:
+            box.setDetailedText("Overwritten files:\n" + "\n".join(overwritten_names))
+        box.exec()
 
     def is_file_selected(self):
         if not self.listwidget.active_list.is_file_selected():
@@ -1337,6 +1393,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 original_paths[os.path.normpath(temp)] = original
 
         yes_to_all = False
+        new_count = 0
+        overwritten_names = []
         for url in md.urls():
             local_file = url.toLocalFile()
 
@@ -1350,16 +1408,26 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             if os.path.isfile(local_file):
                 suggested_name = original_paths.get(os.path.normpath(local_file))
                 ret = (
-                    self._add_file_with_name(local_file, suggested_name, ask_name=False)
+                    self._add_file_with_name(
+                        local_file, suggested_name, ask_name=False, show_summary=False
+                    )
                     if suggested_name
-                    else self._add_file(local_file, ask_name=not yes_to_all)
+                    else self._add_file(local_file, ask_name=not yes_to_all, show_summary=False)
                 )
+                new, overwritten = self._classify_add(ret)
+                new_count += new
+                if overwritten:
+                    overwritten_names.append(suggested_name or normalize_name(local_file))
             else:
-                ret = self._add_folder(local_file)
+                new, names = self._add_folder(local_file, show_summary=False)
+                new_count += new
+                overwritten_names.extend(names)
+                ret = None
 
             if ret == QMessageBox.StandardButton.YesToAll:
                 yes_to_all = True
 
+        self._show_add_summary(new_count, overwritten_names)
         event.acceptProposedAction()
 
 
