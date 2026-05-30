@@ -2,17 +2,19 @@ import re
 from typing import TYPE_CHECKING
 
 from pyBIG import base_archive
-from PyQt6.QtCore import QEvent, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QEvent, QSize, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QTextOption
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QRadioButton,
+    QStyle,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
@@ -243,3 +245,82 @@ class NewTabDialog(QDialog):
         checked_button = self.button_group.checkedButton()
         widget_type = checked_button.text().split()[0].lower()
         return name, widget_type
+
+
+class AddSummaryDialog(QDialog):
+    """Resizable summary shown after add-to-archive operations.
+
+    Unlike ``QMessageBox``, this dialog can be resized and maximized, so the
+    "Show Details" list of new and overwritten files gets more room.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        new_names: list[str],
+        overwritten_names: list[str],
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle("Files added")
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, True)
+        self.setSizeGripEnabled(True)
+
+        layout = QVBoxLayout(self)
+
+        header = QHBoxLayout()
+        icon = QLabel()
+        icon.setPixmap(
+            self.style()
+            .standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation)
+            .pixmap(QSize(32, 32))
+        )
+        icon.setAlignment(Qt.AlignmentFlag.AlignTop)
+        header.addWidget(icon)
+        label = QLabel(message)
+        label.setWordWrap(True)
+        header.addWidget(label, 1)
+        layout.addLayout(header)
+
+        details_text = self._build_details(new_names, overwritten_names)
+
+        self.details = QTextEdit()
+        self.details.setReadOnly(True)
+        self.details.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.details.setPlainText(details_text)
+        self.details.setVisible(False)
+        layout.addWidget(self.details, 1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(self.accept)
+        if details_text:
+            self.toggle = buttons.addButton("Show Details", QDialogButtonBox.ButtonRole.ActionRole)
+            self.toggle.setCheckable(True)
+            self.toggle.toggled.connect(self._toggle_details)
+        layout.addWidget(buttons)
+
+        self.resize(420, 160)
+
+    @staticmethod
+    def _build_details(new_names: list[str], overwritten_names: list[str]) -> str:
+        """New files first, then a separator, then overwritten files.
+
+        Empty sections are omitted.
+        """
+        sections = []
+        if new_names:
+            sections.append(
+                f"New files ({len(new_names)}):\n" + "\n".join(f"  {name}" for name in new_names)
+            )
+        if overwritten_names:
+            sections.append(
+                f"Overwritten files ({len(overwritten_names)}):\n"
+                + "\n".join(f"  {name}" for name in overwritten_names)
+            )
+        return ("\n" + "─" * 40 + "\n").join(sections)
+
+    def _toggle_details(self, shown: bool) -> None:
+        self.details.setVisible(shown)
+        self.toggle.setText("Hide Details" if shown else "Show Details")
+        if shown and self.height() < 320:
+            self.resize(self.width(), 360)
