@@ -913,7 +913,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
     def _add_resolved(self, url, name, *, blank=False, ask_name=True, show_summary=True):
         """Add a single file under a resolved ``name``, optionally prompting for it.
 
-        Returns the :class:`AddOutcome` for the add.
+        Returns ``(outcome, name)`` where ``name`` is the name the file was
+        actually stored under (after the rename prompt), so callers report the
+        real entry rather than the name they passed in.
         """
         if ask_name:
             name, ok = WrappingInputDialog.getText(
@@ -923,7 +925,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 name,
             )
             if not ok or not name:
-                return AddOutcome.SKIPPED
+                return AddOutcome.SKIPPED, name
 
         outcome = self.add_file_to_archive(url, name, blank, skip_all=not ask_name)
         if outcome is AddOutcome.NEW or outcome.overwrote:
@@ -932,7 +934,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
         if show_summary:
             self._show_add_summary(*self._tally(outcome, name))
-        return outcome
+        return outcome, name
 
     def _add_folder(self, url, *, show_summary=True):
         skip_all = False
@@ -1416,14 +1418,14 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
 
             if os.path.isfile(local_file):
                 suggested_name = original_paths.get(os.path.normpath(local_file))
-                outcome = (
+                outcome, name = (
                     self._add_file_with_name(
                         local_file, suggested_name, ask_name=False, show_summary=False
                     )
                     if suggested_name
                     else self._add_file(local_file, ask_name=not yes_to_all, show_summary=False)
                 )
-                new, names = self._tally(outcome, suggested_name or normalize_name(local_file))
+                new, names = self._tally(outcome, name)
                 new_names.extend(new)
                 overwritten_names.extend(names)
                 if outcome is AddOutcome.OVERWRITTEN_ALL:
