@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import platformdirs
 import qdarktheme
 from PyQt6.QtCore import QSettings
-from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QInputDialog
 
 from file_views import ListFileView
 from palette_themes import PALETTE_THEMES, build_palette, build_stylesheet
@@ -212,6 +212,14 @@ class Settings:
         self.set_str("settings/add_overwrite_default", value.value)
 
     @property
+    def show_add_summary(self) -> bool:
+        return self.get_bool("settings/show_add_summary", False)
+
+    @show_add_summary.setter
+    def show_add_summary(self, value: bool) -> None:
+        self.set_bool("settings/show_add_summary", value)
+
+    @property
     def smart_replace_enabled(self) -> bool:
         return self.get_bool("settings/smart_replace", False)
 
@@ -301,26 +309,6 @@ class Settings:
     def toggle_search_archive_regex(self):
         self.search_archive_regex_bool = not self.search_archive_regex_bool
 
-    def toggle_preview(self):
-        self.preview_enabled = self.main.preview_action.isChecked()
-
-    def toggle_large_archives(self):
-        is_checked = self.main.large_archive_action.isChecked()
-        self.large_archive = is_checked
-
-        state = "enabled" if is_checked else "disabled"
-        message = (
-            f"The large archive settings has been {state},"
-            " please restart FinalBIGv2 to apply the change."
-        )
-        if is_checked:
-            message += "\n\nNote: Large archives takes less memory but may increase loading times."
-        QMessageBox.information(
-            self.main,
-            "Large Archive Setting Changed",
-            message,
-        )
-
     def theme_is_dark(self, theme: str = None) -> bool:
         theme = theme if theme is not None else self.theme
         if theme == "qdark":
@@ -364,12 +352,6 @@ class Settings:
     def set_theme(self, theme: str):
         self.theme = theme
         self.apply_theme(theme)
-
-    def toggle_external(self):
-        self.external = self.main.use_external_action.isChecked()
-
-    def toggle_smart_replace(self):
-        self.smart_replace_enabled = self.main.smart_replace_action.isChecked()
 
     def set_extract_overwrite_default(self, value: OverwriteDefault):
         self.extract_overwrite_default = value

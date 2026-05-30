@@ -6,21 +6,30 @@ from PyQt6.QtCore import QEvent, QSize, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QTextOption
 from PyQt6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFrame,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QRadioButton,
+    QScrollArea,
+    QSpinBox,
     QStyle,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from file_views import file_view_mapping
+from palette_themes import PALETTE_THEMES
+from settings import OverwriteDefault
+from utils.utils import ENCODING_LIST
 
 if TYPE_CHECKING:
     from main import MainWindow
@@ -324,3 +333,273 @@ class AddSummaryDialog(QDialog):
         self.toggle.setText("Hide Details" if shown else "Show Details")
         if shown and self.height() < 320:
             self.resize(self.width(), 360)
+
+
+class SettingsDialog(QDialog):
+    def __init__(self, main: "MainWindow"):
+        super().__init__(main)
+        self.main = main
+        self.settings = main.settings
+        self.setWindowTitle("Settings")
+        self.setMinimumWidth(560)
+        self.resize(580, 520)
+        self._original_theme = self.settings.theme
+        self._original_large_archive = self.settings.large_archive
+        self._original_undo_size = self.settings.undo_stack_size
+
+        outer = QVBoxLayout(self)
+        outer.setSpacing(8)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setSpacing(10)
+        content_layout.setContentsMargins(4, 4, 4, 4)
+
+        appearance_group = QGroupBox("Appearance")
+        appearance_layout = QVBoxLayout(appearance_group)
+        theme_entries = [("Dark (default)", "qdark"), ("Light", "qlight")]
+        for key, (label, _scheme) in PALETTE_THEMES.items():
+            theme_entries.append((label, key))
+        self.theme_combo = QComboBox()
+        self.theme_combo.setMinimumWidth(160)
+        for label, value in theme_entries:
+            self.theme_combo.addItem(label, value)
+        for i in range(self.theme_combo.count()):
+            if self.theme_combo.itemData(i) == self.settings.theme:
+                self.theme_combo.setCurrentIndex(i)
+                break
+        self.theme_combo.currentIndexChanged.connect(self._preview_theme)
+        appearance_layout.addWidget(
+            self._make_row(
+                "Theme",
+                "Color scheme for the application interface. Changes are previewed immediately.",
+                self.theme_combo,
+            )
+        )
+        content_layout.addWidget(appearance_group)
+
+        behavior_group = QGroupBox("Behavior")
+        behavior_layout = QVBoxLayout(behavior_group)
+
+        self.external_check = QCheckBox()
+        self.external_check.setChecked(self.settings.external)
+        behavior_layout.addWidget(
+            self._make_row(
+                "Use External Programs",
+                "Open files using the system's default application instead of "
+                "the built-in editor.",
+                self.external_check,
+            )
+        )
+
+        self.smart_replace_check = QCheckBox()
+        self.smart_replace_check.setChecked(self.settings.smart_replace_enabled)
+        behavior_layout.addWidget(
+            self._make_row(
+                "Smart Replace",
+                "When adding a file, try to match it to an existing archive entry by filename.",
+                self.smart_replace_check,
+            )
+        )
+
+        self.preview_check = QCheckBox()
+        self.preview_check.setChecked(self.settings.preview_enabled)
+        behavior_layout.addWidget(
+            self._make_row(
+                "Preview Files",
+                "Show a preview tab automatically when a file is selected in the file list.",
+                self.preview_check,
+            )
+        )
+
+        self.add_summary_check = QCheckBox()
+        self.add_summary_check.setChecked(self.settings.show_add_summary)
+        behavior_layout.addWidget(
+            self._make_row(
+                "Show Add Summary",
+                "Show a summary dialog with counts of new and overwritten files after adding files"
+                " to the archive.",
+                self.add_summary_check,
+            )
+        )
+
+        self.default_view_combo = QComboBox()
+        self.default_view_combo.setMinimumWidth(160)
+        for view_type in file_view_mapping:
+            self.default_view_combo.addItem(f"{view_type.capitalize()} View", view_type)
+        for i in range(self.default_view_combo.count()):
+            if self.default_view_combo.itemData(i) == self.settings.default_file_list_type:
+                self.default_view_combo.setCurrentIndex(i)
+                break
+        behavior_layout.addWidget(
+            self._make_row(
+                "Default File View",
+                "View type used when creating new file list tabs.",
+                self.default_view_combo,
+            )
+        )
+        content_layout.addWidget(behavior_group)
+
+        file_ops_group = QGroupBox("File Operations")
+        file_ops_layout = QVBoxLayout(file_ops_group)
+        overwrite_opts = [
+            ("Ask", OverwriteDefault.ASK),
+            ("Overwrite", OverwriteDefault.OVERWRITE),
+            ("Skip", OverwriteDefault.SKIP),
+        ]
+
+        self.extract_overwrite_combo = QComboBox()
+        self.extract_overwrite_combo.setMinimumWidth(120)
+        for label, value in overwrite_opts:
+            self.extract_overwrite_combo.addItem(label, value)
+        for i in range(self.extract_overwrite_combo.count()):
+            if self.extract_overwrite_combo.itemData(i) == self.settings.extract_overwrite_default:
+                self.extract_overwrite_combo.setCurrentIndex(i)
+                break
+        file_ops_layout.addWidget(
+            self._make_row(
+                "Extract Overwrite Default",
+                "Default action when extracting a file that already exists at the destination.",
+                self.extract_overwrite_combo,
+            )
+        )
+
+        self.add_overwrite_combo = QComboBox()
+        self.add_overwrite_combo.setMinimumWidth(120)
+        for label, value in overwrite_opts:
+            self.add_overwrite_combo.addItem(label, value)
+        for i in range(self.add_overwrite_combo.count()):
+            if self.add_overwrite_combo.itemData(i) == self.settings.add_overwrite_default:
+                self.add_overwrite_combo.setCurrentIndex(i)
+                break
+        file_ops_layout.addWidget(
+            self._make_row(
+                "Add Overwrite Default",
+                "Default action when adding a file whose name already exists in the archive.",
+                self.add_overwrite_combo,
+            )
+        )
+        content_layout.addWidget(file_ops_group)
+
+        perf_group = QGroupBox("Performance")
+        perf_layout = QVBoxLayout(perf_group)
+
+        self.large_archive_check = QCheckBox()
+        self.large_archive_check.setChecked(self.settings.large_archive)
+        perf_layout.addWidget(
+            self._make_row(
+                "Large Archive Architecture",
+                "Use a memory-efficient but slower system for very large archive files."
+                " Requires a restart to take effect.",
+                self.large_archive_check,
+            )
+        )
+
+        self.undo_spin = QSpinBox()
+        self.undo_spin.setRange(1, 500)
+        self.undo_spin.setValue(self.settings.undo_stack_size)
+        self.undo_spin.setMinimumWidth(80)
+        perf_layout.addWidget(
+            self._make_row(
+                "Undo Stack Size",
+                "Maximum number of undo steps kept in memory (1–500).",
+                self.undo_spin,
+            )
+        )
+        content_layout.addWidget(perf_group)
+
+        adv_group = QGroupBox("Advanced")
+        adv_layout = QVBoxLayout(adv_group)
+
+        self.encoding_combo = QComboBox()
+        self.encoding_combo.setMinimumWidth(160)
+        self.encoding_combo.addItems(ENCODING_LIST)
+        if self.settings.encoding in ENCODING_LIST:
+            self.encoding_combo.setCurrentIndex(ENCODING_LIST.index(self.settings.encoding))
+        adv_layout.addWidget(
+            self._make_row(
+                "Text Encoding",
+                "Character encoding used when reading text files from the archive.",
+                self.encoding_combo,
+            )
+        )
+        content_layout.addWidget(adv_group)
+        content_layout.addStretch()
+
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._apply)
+        buttons.rejected.connect(self._cancel)
+        outer.addWidget(buttons)
+
+    def _make_row(self, name: str, description: str, widget) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setSpacing(16)
+
+        text = QWidget()
+        text_layout = QVBoxLayout(text)
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(2)
+
+        title = QLabel(f"<b>{name}</b>")
+        desc = QLabel(description)
+        desc.setWordWrap(True)
+        f = desc.font()
+        f.setPointSizeF(max(7.5, f.pointSizeF() - 1))
+        desc.setFont(f)
+
+        text_layout.addWidget(title)
+        text_layout.addWidget(desc)
+
+        layout.addWidget(text, stretch=1)
+        layout.addWidget(widget, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        return row
+
+    def _preview_theme(self, index: int):
+        self.settings.set_theme(self.theme_combo.itemData(index))
+
+    def _apply(self):
+        self.settings.external = self.external_check.isChecked()
+        self.settings.smart_replace_enabled = self.smart_replace_check.isChecked()
+        self.settings.preview_enabled = self.preview_check.isChecked()
+        self.settings.show_add_summary = self.add_summary_check.isChecked()
+        self.settings.default_file_list_type = self.default_view_combo.currentData()
+        self.settings.extract_overwrite_default = self.extract_overwrite_combo.currentData()
+        self.settings.add_overwrite_default = self.add_overwrite_combo.currentData()
+        self.settings.encoding = self.encoding_combo.currentText()
+
+        if self.large_archive_check.isChecked() != self._original_large_archive:
+            new_val = self.large_archive_check.isChecked()
+            self.settings.large_archive = new_val
+            state = "enabled" if new_val else "disabled"
+            msg = (
+                f"The large archive setting has been {state}. "
+                "Please restart FinalBIGv2 to apply the change."
+            )
+            if new_val:
+                msg += "\n\nNote: Large archives use less memory but may increase loading times."
+            QMessageBox.information(self.main, "Large Archive Setting Changed", msg)
+
+        new_undo = self.undo_spin.value()
+        if new_undo != self._original_undo_size:
+            self.settings.undo_stack_size = new_undo
+            self.main.undo_stack.resize(new_undo)
+            self.main.update_undo_redo_actions()
+
+        self.accept()
+
+    def _cancel(self):
+        if self.settings.theme != self._original_theme:
+            self.settings.set_theme(self._original_theme)
+        self.reject()

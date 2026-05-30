@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QActionGroup, QIcon, QKeySequence
+from PyQt6.QtGui import QAction, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -13,10 +13,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from file_views import FileViewTabs, ListFileView, file_view_mapping
+from file_views import FileViewTabs, ListFileView
 from misc import SearchBox, TabWidget
-from palette_themes import PALETTE_THEMES
-from settings import OverwriteDefault
 from utils.utils import resource_path
 
 if TYPE_CHECKING:
@@ -37,14 +35,6 @@ class HasUiElements:
     workspace_menu: QMenu
     undo_action: QAction
     redo_action: QAction
-    theme_menu: QMenu
-    use_external_action: QAction
-    large_archive_action: QAction
-    smart_replace_action: QAction
-    preview_action: QAction
-    default_view_menu: QMenu
-    extract_overwrite_menu: QMenu
-    add_overwrite_menu: QMenu
     lock_exceptions: list
 
 
@@ -133,6 +123,12 @@ def create_menu(main: "MainWindow"):
 
     file_menu.addAction("Save &As...", main.save_as)
 
+    file_menu.addSeparator()
+    settings_action = file_menu.addAction("&Settings...", main.show_settings)
+    settings_action.setShortcut(QKeySequence("CTRL+,"))
+    main.lock_exceptions.append(settings_action)
+    file_menu.addSeparator()
+
     main.recent_menu = QMenu("Open &Recent", main)
     file_menu.addMenu(main.recent_menu)
     main.update_recent_files_menu()
@@ -217,136 +213,11 @@ def create_menu(main: "MainWindow"):
     search_achive_regex_action.setShortcut(QKeySequence("ALT+SHIFT+F"))
 
     option_menu = menu.addMenu("&Help")
-    option_menu.setToolTipsVisible(True)
     main.lock_exceptions.append(option_menu.addAction("&About", main.show_about))
 
     help_action = option_menu.addAction("&Help", main.show_help)
     help_action.setShortcut(QKeySequence("CTRL+H"))
     main.lock_exceptions.append(help_action)
-
-    option_menu.addSeparator()
-
-    main.theme_menu = QMenu("&Theme", main)
-    main.theme_menu.setToolTip("Application color theme")
-    option_menu.addMenu(main.theme_menu)
-    main.lock_exceptions.append(main.theme_menu)
-
-    theme_group = QActionGroup(main)
-    theme_group.setExclusive(True)
-    current_theme = main.settings.theme
-
-    top_entries = [("Dark (default)", "qdark"), ("Light", "qlight")]
-    for key, (label, _scheme) in PALETTE_THEMES.items():
-        top_entries.append((label, key))
-
-    for label, value in top_entries:
-        action = QAction(label, main, checkable=True)
-        action.setData(value)
-        action.setChecked(current_theme == value)
-        action.triggered.connect(lambda _, v=value: main.settings.set_theme(v))
-        theme_group.addAction(action)
-        main.theme_menu.addAction(action)
-        main.lock_exceptions.append(action)
-
-    main.use_external_action = QAction("Use &External Programs?", main, checkable=True)
-    main.use_external_action.setToolTip(
-        "Whether to open using the internal editor or the user's default application"
-    )
-    main.use_external_action.setChecked(main.settings.external)
-    main.use_external_action.triggered.connect(main.settings.toggle_external)
-    option_menu.addAction(main.use_external_action)
-    main.lock_exceptions.append(main.use_external_action)
-
-    main.large_archive_action = QAction("Use &Large Archive Architecture?", main, checkable=True)
-    main.large_archive_action.setToolTip(
-        "Change the system to use Large Archives, a slower system that handles large files better"
-    )
-    main.large_archive_action.setChecked(main.settings.large_archive)
-    main.large_archive_action.triggered.connect(main.settings.toggle_large_archives)
-    option_menu.addAction(main.large_archive_action)
-    main.lock_exceptions.append(main.large_archive_action)
-
-    main.smart_replace_action = QAction("&Smart Replace?", main, checkable=True)
-    main.smart_replace_action.setToolTip(
-        "Try to figure out which file the user is trying to replace"
-    )
-    main.smart_replace_action.setChecked(main.settings.smart_replace_enabled)
-    main.smart_replace_action.triggered.connect(main.settings.toggle_smart_replace)
-    option_menu.addAction(main.smart_replace_action)
-    main.lock_exceptions.append(main.smart_replace_action)
-
-    main.preview_action = QAction("&Preview?", main, checkable=True)
-    main.preview_action.setToolTip("Enable Previewing files")
-    main.preview_action.setChecked(main.settings.preview_enabled)
-    main.preview_action.triggered.connect(main.settings.toggle_preview)
-    option_menu.addAction(main.preview_action)
-    main.lock_exceptions.append(main.preview_action)
-
-    overwrite_options = [
-        ("Ask", OverwriteDefault.ASK),
-        ("Overwrite", OverwriteDefault.OVERWRITE),
-        ("Skip", OverwriteDefault.SKIP),
-    ]
-
-    main.extract_overwrite_menu = QMenu("&Extract Overwrite Default", main)
-    main.extract_overwrite_menu.setToolTip(
-        "Default response when extracting a file that already exists in the destination archive"
-    )
-    option_menu.addMenu(main.extract_overwrite_menu)
-    main.lock_exceptions.append(main.extract_overwrite_menu)
-
-    extract_overwrite_group = QActionGroup(main)
-    extract_overwrite_group.setExclusive(True)
-    for label, value in overwrite_options:
-        action = QAction(label, main, checkable=True)
-        action.setData(value)
-        action.setChecked(main.settings.extract_overwrite_default == value)
-        action.triggered.connect(lambda _, v=value: main.settings.set_extract_overwrite_default(v))
-        extract_overwrite_group.addAction(action)
-        main.extract_overwrite_menu.addAction(action)
-        main.lock_exceptions.append(action)
-
-    main.add_overwrite_menu = QMenu("&Add Overwrite Default", main)
-    main.add_overwrite_menu.setToolTip(
-        "Default response when adding a file whose name already exists in the archive"
-    )
-    option_menu.addMenu(main.add_overwrite_menu)
-    main.lock_exceptions.append(main.add_overwrite_menu)
-
-    add_overwrite_group = QActionGroup(main)
-    add_overwrite_group.setExclusive(True)
-    for label, value in overwrite_options:
-        action = QAction(label, main, checkable=True)
-        action.setData(value)
-        action.setChecked(main.settings.add_overwrite_default == value)
-        action.triggered.connect(lambda _, v=value: main.settings.set_add_overwrite_default(v))
-        add_overwrite_group.addAction(action)
-        main.add_overwrite_menu.addAction(action)
-        main.lock_exceptions.append(action)
-
-    main.default_view_menu = QMenu("Default File &View", main)
-    main.default_view_menu.setToolTip("Select the default view type when creating new file lists")
-    option_menu.addMenu(main.default_view_menu)
-    main.lock_exceptions.append(main.default_view_menu)
-
-    view_action_group = QActionGroup(main)
-    view_action_group.setExclusive(True)
-
-    for view_type, _ in file_view_mapping.items():
-        view_action = QAction(f"{view_type.capitalize()} View", main, checkable=True)
-        view_action.setData(view_type)
-        view_action.setChecked(main.settings.default_file_list_type == view_type)
-        view_action.triggered.connect(
-            lambda _, vtype=view_type: main.settings.set_default_file_list_type(vtype)
-        )
-        view_action_group.addAction(view_action)
-        main.default_view_menu.addAction(view_action)
-        main.lock_exceptions.append(view_action)
-
-    main.lock_exceptions.append(option_menu.addAction("&Set encoding", main.settings.set_encoding))
-    main.lock_exceptions.append(
-        option_menu.addAction("Set &Undo Stack Size", main.settings.set_undo_stack_size)
-    )
 
 
 def generate_ui(main: "MainWindow"):

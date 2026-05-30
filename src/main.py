@@ -33,7 +33,7 @@ from PyQt6.QtWidgets import (
 )
 
 from file_views import get_file_view_class
-from misc import AddSummaryDialog, NewTabDialog, WrappingInputDialog
+from misc import AddSummaryDialog, NewTabDialog, SettingsDialog, WrappingInputDialog
 from search import SearchManager
 from settings import FileTab, FileView, OverwriteDefault, Settings, Workplace
 from tabs import get_tab_from_file_type
@@ -52,7 +52,7 @@ from workspaces import WorkspaceDialog
 if TYPE_CHECKING:
     from tabs.generic_tab import GenericTab
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 
 basedir = os.path.dirname(__file__)
 
@@ -687,6 +687,9 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.add_file_list(name, widget_type)
         self.tab_current_index = self.listwidget.currentIndex()
 
+    def show_settings(self):
+        SettingsDialog(self).exec()
+
     def show_help(self):
         QMessageBox.information(self, "Help", HELP_STRING)
 
@@ -1023,6 +1026,8 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         return [], []
 
     def _show_add_summary(self, new_names: list[str], overwritten_names: list[str]) -> None:
+        if not self.settings.show_add_summary:
+            return
         total = len(new_names) + len(overwritten_names)
         if total == 0:
             return
