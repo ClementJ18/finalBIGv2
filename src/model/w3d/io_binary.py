@@ -15,7 +15,7 @@ def read_string(io_stream):
     while ord(byte) != 0:
         str_buf.append(byte)
         byte = io_stream.read(1)
-    return (b"".join(str_buf)).decode("utf-8")
+    return (b"".join(str_buf)).decode("utf-8", errors="replace")
 
 
 def read_fixed_string(io_stream):

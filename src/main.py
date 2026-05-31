@@ -52,7 +52,7 @@ from workspaces import WorkspaceDialog
 if TYPE_CHECKING:
     from tabs.generic_tab import GenericTab
 
-__version__ = "0.17.0"
+__version__ = "0.17.1"
 
 basedir = os.path.dirname(__file__)
 
