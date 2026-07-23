@@ -14,7 +14,6 @@ pyqtdarktheme
 ruff
 PyOpenGL
 PyOpenGL_accelerate
-webbrowser
 moddb
 requests
 platformdirs
