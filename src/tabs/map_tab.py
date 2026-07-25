@@ -32,7 +32,7 @@ class MapTab(GenericTab):
     def save(self):
         with open(self.path, "rb") as f:
             data = f.read()
-            self.archive.edit_file(self.name, data)
+            self.commit_to_archive(data)
             self.data = data
 
         super().save()

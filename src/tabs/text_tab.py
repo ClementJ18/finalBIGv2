@@ -461,7 +461,7 @@ class TextTab(GenericTab):
             data = self.text_widget.text()
 
         string = encode_string(data, self.main.settings.encoding)
-        self.archive.edit_file(self.name, string)
+        self.commit_to_archive(string)
 
         super().save()
 

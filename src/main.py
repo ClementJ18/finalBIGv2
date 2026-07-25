@@ -124,11 +124,16 @@ class AddOutcome(Enum):
     ``OVERWRITTEN_ALL`` is an overwrite where the user also asked to apply the
     choice to every following file ("Yes to All"); loops use it to stop
     prompting, keeping the Qt button enum out of caller code.
+
+    ``UNCHANGED`` means an entry with that name already held byte-identical
+    content, so the add was a no-op: the archive is left clean (not dirtied)
+    so a later save can skip the full repack.
     """
 
     NEW = auto()
     OVERWRITTEN = auto()
     OVERWRITTEN_ALL = auto()
+    UNCHANGED = auto()
     SKIPPED = auto()
     FAILED = auto()
 
@@ -557,6 +562,17 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
             if tab.unsaved:
                 tab.save()
 
+        # A BIG save is a full repack of the entire archive. When we're writing
+        # back over the same file with nothing pending, the result is identical
+        # to what's already on disk, so skip the rewrite. Save As targets a new
+        # path, so it always writes.
+        writing_in_place = self.path is not None and os.path.normcase(
+            os.path.abspath(path)
+        ) == os.path.normcase(os.path.abspath(self.path))
+        if writing_in_place and not self.archive.modified_entries:
+            QMessageBox.information(self, "Done", "No changes to save.")
+            return True
+
         try:
             self.archive.save(path)
             QMessageBox.information(self, "Done", "Archive has been saved")
@@ -731,15 +747,17 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         files.reverse()
         new_names = []
         overwritten_names = []
+        unchanged_names = []
         for file in files:
-            new, overwritten = self._merge_archives(file)
+            new, overwritten, unchanged = self._merge_archives(file)
             new_names.extend(new)
             overwritten_names.extend(overwritten)
+            unchanged_names.extend(unchanged)
 
         self.settings.last_dir = os.path.dirname(files[0])
         self.listwidget.add_files(new_names + overwritten_names)
         self.update_archive_name()
-        self._show_add_summary(new_names, overwritten_names)
+        self._show_add_summary(new_names, overwritten_names, unchanged_names)
 
     def _merge_archives(self, path):
         if self.settings.large_archive:
@@ -751,6 +769,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         skip_all = False
         new_names = []
         overwritten_names = []
+        unchanged_names = []
         files = archive.file_list()
         length = len(files)
         text_box = QMessageBox(
@@ -771,7 +790,6 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 f"File: ({index + 1}/{length})<br>Processing: <b>{file}</b>"
             )
             QApplication.processEvents()
-            overwrote = False
             if self.archive.file_exists(file):
                 default = (
                     OverwriteDefault.OVERWRITE
@@ -780,6 +798,14 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                 )
                 if default is OverwriteDefault.SKIP:
                     continue
+
+                incoming = archive.read_file(file)
+                if self.archive.read_file(file) == incoming:
+                    # Identical content already present: skip without dirtying
+                    # the archive, so a later save can be avoided entirely.
+                    unchanged_names.append(file)
+                    continue
+
                 if default is OverwriteDefault.ASK:
                     ret = QMessageBox.question(
                         self,
@@ -796,13 +822,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                         skip_all = True
 
                 self.archive.remove_file(file)
-                overwrote = True
-
-            self.archive.add_file(file, archive.read_file(file))
-
-            if overwrote:
+                self.archive.add_file(file, incoming)
                 overwritten_names.append(file)
             else:
+                self.archive.add_file(file, archive.read_file(file))
                 new_names.append(file)
 
             size = self.archive.archive_memory_size()
@@ -827,7 +850,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         )
         text_box.accept()
 
-        return new_names, overwritten_names
+        return new_names, overwritten_names, unchanged_names
 
     def new(self):
         self._new()
@@ -944,6 +967,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         common_dir = os.path.dirname(url)
         new_names = []
         overwritten_names = []
+        unchanged_names = []
         for root, _, files in os.walk(url):
             for f in files:
                 full_path = os.path.join(root, f)
@@ -952,9 +976,10 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     full_path, name, blank=False, skip_all=skip_all, undoable=False
                 )
 
-                new, overwritten = self._tally(outcome, name)
+                new, overwritten, unchanged = self._tally(outcome, name)
                 new_names.extend(new)
                 overwritten_names.extend(overwritten)
+                unchanged_names.extend(unchanged)
 
                 if outcome is AddOutcome.OVERWRITTEN_ALL:
                     skip_all = True
@@ -962,51 +987,63 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         self.listwidget.add_files(new_names + overwritten_names)
         self.update_archive_name()
         if show_summary:
-            self._show_add_summary(new_names, overwritten_names)
-        return new_names, overwritten_names
+            self._show_add_summary(new_names, overwritten_names, unchanged_names)
+        return new_names, overwritten_names, unchanged_names
 
     def add_file_to_archive(self, url, name, blank=False, skip_all=False, undoable=True):
         """Add ``url`` to the archive as ``name``.
 
         Returns an :class:`AddOutcome` describing what actually happened to the
         archive. ``OVERWRITTEN_ALL`` additionally tells loops to stop prompting.
+        ``UNCHANGED`` means the new bytes matched the existing entry, so the
+        archive was left untouched.
         """
         replaced_data = None
         overwrite_all = skip_all
         existed = self.archive.file_exists(name)
         if existed:
             replaced_data = self.archive.read_file(name)
-            if not skip_all:
-                default = self.settings.add_overwrite_default
-                if default is OverwriteDefault.SKIP:
-                    return AddOutcome.SKIPPED
-                if default is OverwriteDefault.OVERWRITE:
-                    overwrite_all = True
-                else:
-                    ret = QMessageBox.question(
-                        self,
-                        "Overwrite file?",
-                        f"<b>{name}</b> already exists, overwrite?",
-                        QMessageBox.StandardButton.Yes
-                        | QMessageBox.StandardButton.No
-                        | QMessageBox.StandardButton.YesToAll,
-                        QMessageBox.StandardButton.No,
-                    )
-                    if ret == QMessageBox.StandardButton.No:
-                        return AddOutcome.SKIPPED
-                    overwrite_all = ret == QMessageBox.StandardButton.YesToAll
-
-            self.archive.remove_file(name)
+            # Honour a "skip existing" default before reading the new bytes, so
+            # the no-overwrite workflow stays a pure no-op.
+            if not skip_all and self.settings.add_overwrite_default is OverwriteDefault.SKIP:
+                return AddOutcome.SKIPPED
 
         try:
             if blank:
-                self.archive.add_file(name, b"")
+                new_data = b""
             else:
                 with open(url, "rb") as f:
-                    self.archive.add_file(name, f.read())
+                    new_data = f.read()
         except Exception as e:
             QMessageBox.warning(self, "Error", str(e))
             return AddOutcome.FAILED
+
+        if existed:
+            if new_data == replaced_data:
+                # Re-adding identical content: leave the entry alone so the
+                # archive isn't dirtied and the next save can be skipped.
+                return AddOutcome.UNCHANGED
+
+            if not skip_all and self.settings.add_overwrite_default is OverwriteDefault.ASK:
+                ret = QMessageBox.question(
+                    self,
+                    "Overwrite file?",
+                    f"<b>{name}</b> already exists, overwrite?",
+                    QMessageBox.StandardButton.Yes
+                    | QMessageBox.StandardButton.No
+                    | QMessageBox.StandardButton.YesToAll,
+                    QMessageBox.StandardButton.No,
+                )
+                if ret == QMessageBox.StandardButton.No:
+                    return AddOutcome.SKIPPED
+                overwrite_all = ret == QMessageBox.StandardButton.YesToAll
+            else:
+                # skip_all, or the OVERWRITE default: overwrite without asking.
+                overwrite_all = True
+
+            self.archive.remove_file(name)
+
+        self.archive.add_file(name, new_data)
 
         if undoable:
             self.undo_stack.push(AddFileCommand(name, self.archive.read_file(name), replaced_data))
@@ -1017,24 +1054,39 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         return AddOutcome.OVERWRITTEN_ALL if overwrite_all else AddOutcome.OVERWRITTEN
 
     @staticmethod
-    def _tally(outcome: AddOutcome, name: str) -> tuple[list[str], list[str]]:
-        """Map one add's outcome to a ``(new_names, overwritten_names)`` pair."""
+    def _tally(outcome: AddOutcome, name: str) -> tuple[list[str], list[str], list[str]]:
+        """Map one add's outcome to a ``(new, overwritten, unchanged)`` triple."""
         if outcome is AddOutcome.NEW:
-            return [name], []
+            return [name], [], []
         if outcome.overwrote:
-            return [], [name]
-        return [], []
+            return [], [name], []
+        if outcome is AddOutcome.UNCHANGED:
+            return [], [], [name]
+        return [], [], []
 
-    def _show_add_summary(self, new_names: list[str], overwritten_names: list[str]) -> None:
+    def _show_add_summary(
+        self,
+        new_names: list[str],
+        overwritten_names: list[str],
+        unchanged_names: list[str] = None,
+    ) -> None:
         if not self.settings.show_add_summary:
             return
-        total = len(new_names) + len(overwritten_names)
-        if total == 0:
+        unchanged_names = unchanged_names or []
+        added = len(new_names) + len(overwritten_names)
+        if added + len(unchanged_names) == 0:
             return
         message = (
-            f"Added {total} file(s) — {len(new_names)} new, {len(overwritten_names)} overwritten."
+            f"Added {added} file(s) — {len(new_names)} new, {len(overwritten_names)} overwritten."
         )
-        AddSummaryDialog(message, new_names, overwritten_names, parent=self).exec()
+        if unchanged_names:
+            message += (
+                f" Skipped {len(unchanged_names)} unchanged file(s) "
+                "(identical content, archive not modified)."
+            )
+        AddSummaryDialog(
+            message, new_names, overwritten_names, unchanged_names, parent=self
+        ).exec()
 
     def is_file_selected(self):
         if not self.listwidget.active_list.is_file_selected():
@@ -1411,6 +1463,7 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
         yes_to_all = False
         new_names = []
         overwritten_names = []
+        unchanged_names = []
         for url in md.urls():
             local_file = url.toLocalFile()
 
@@ -1430,17 +1483,19 @@ class MainWindow(QMainWindow, HasUiElements, SearchManager):
                     if suggested_name
                     else self._add_file(local_file, ask_name=not yes_to_all, show_summary=False)
                 )
-                new, names = self._tally(outcome, name)
+                new, names, unchanged = self._tally(outcome, name)
                 new_names.extend(new)
                 overwritten_names.extend(names)
+                unchanged_names.extend(unchanged)
                 if outcome is AddOutcome.OVERWRITTEN_ALL:
                     yes_to_all = True
             else:
-                new, names = self._add_folder(local_file, show_summary=False)
+                new, names, unchanged = self._add_folder(local_file, show_summary=False)
                 new_names.extend(new)
                 overwritten_names.extend(names)
+                unchanged_names.extend(unchanged)
 
-        self._show_add_summary(new_names, overwritten_names)
+        self._show_add_summary(new_names, overwritten_names, unchanged_names)
         event.acceptProposedAction()
 
 

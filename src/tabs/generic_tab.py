@@ -87,6 +87,18 @@ class GenericTab(QWidget):
         self.main.tabs.setTabText(self.main.tabs.currentIndex(), self.name)
         self.main.update_archive_name()
 
+    def commit_to_archive(self, content: bytes):
+        """Push edited content into the archive, but only mark the entry
+        modified when the bytes actually changed. Marking an unchanged entry
+        dirties the archive and forces a full repack on the next save, so a
+        no-op edit (open + save, or edit-then-revert) would needlessly rewrite
+        the whole BIG.
+        """
+        if self.archive.file_exists(self.name) and self.archive.read_file(self.name) == content:
+            return
+
+        self.archive.edit_file(self.name, content)
+
     def search(self):
         pass
 

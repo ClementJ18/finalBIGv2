@@ -338,7 +338,7 @@ class CustomHeroTab(GenericTab):
                 # Generate bytes and save
                 cah_bytes = self.hero.write()
 
-            self.archive.edit_file(self.name, cah_bytes)
+            self.commit_to_archive(cah_bytes)
             super().save()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))

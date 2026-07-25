@@ -268,8 +268,10 @@ class AddSummaryDialog(QDialog):
         message: str,
         new_names: list[str],
         overwritten_names: list[str],
+        unchanged_names: list[str] = None,
         parent=None,
     ):
+        unchanged_names = unchanged_names or []
         super().__init__(parent)
         self.setWindowTitle("Files added")
         self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, True)
@@ -291,7 +293,7 @@ class AddSummaryDialog(QDialog):
         header.addWidget(label, 1)
         layout.addLayout(header)
 
-        details_text = self._build_details(new_names, overwritten_names)
+        details_text = self._build_details(new_names, overwritten_names, unchanged_names)
 
         self.details = QTextEdit()
         self.details.setReadOnly(True)
@@ -311,11 +313,14 @@ class AddSummaryDialog(QDialog):
         self.resize(420, 160)
 
     @staticmethod
-    def _build_details(new_names: list[str], overwritten_names: list[str]) -> str:
-        """New files first, then a separator, then overwritten files.
+    def _build_details(
+        new_names: list[str], overwritten_names: list[str], unchanged_names: list[str] = None
+    ) -> str:
+        """New files first, then overwritten, then unchanged, separated by rules.
 
         Empty sections are omitted.
         """
+        unchanged_names = unchanged_names or []
         sections = []
         if new_names:
             sections.append(
@@ -325,6 +330,11 @@ class AddSummaryDialog(QDialog):
             sections.append(
                 f"Overwritten files ({len(overwritten_names)}):\n"
                 + "\n".join(f"  {name}" for name in overwritten_names)
+            )
+        if unchanged_names:
+            sections.append(
+                f"Unchanged files ({len(unchanged_names)}):\n"
+                + "\n".join(f"  {name}" for name in unchanged_names)
             )
         return ("\n" + "─" * 40 + "\n").join(sections)
 
